@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1220" />
+      <stop offset="50%" stop-color="#1c2530" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7" />
+      <stop offset="50%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bgGrad)" />
+  <!-- Hexagon border -->
+  <polygon points="256,70 410,158 410,336 256,424 102,336 102,158" fill="none" stroke="url(#primaryGrad)" stroke-width="8" opacity="0.4" />
+  <!-- Inner hexagon -->
+  <polygon points="256,92 390,168 390,324 256,400 122,324 122,168" fill="#131c2e" stroke="#22304a" stroke-width="4" />
+  
+  <!-- K letter graphic with glowing accents -->
+  <g transform="translate(146, 136)" filter="url(#glow)">
+    <!-- Vertical stem -->
+    <rect x="20" y="20" width="36" height="200" rx="18" fill="url(#primaryGrad)" />
+    <!-- Upper diagonal -->
+    <path d="M 40 120 L 160 25 C 172 15 192 25 185 40 L 95 130 Z" fill="#06b6d4" />
+    <!-- Lower diagonal -->
+    <path d="M 85 115 L 180 215 C 190 226 178 242 162 238 L 45 135 Z" fill="#a855f7" />
+    <!-- Center AI Node spark -->
+    <circle cx="80" cy="120" r="14" fill="#ffffff" />
+    <circle cx="80" cy="120" r="22" fill="none" stroke="#22d3ee" stroke-width="3" opacity="0.8" />
+  </g>
+  <!-- Text subtitle -->
+  <text x="256" y="450" font-family="'Space Grotesk', sans-serif" font-size="32" font-weight="700" fill="#e2e8f0" text-anchor="middle" letter-spacing="4">KayBiT</text>
+</svg>

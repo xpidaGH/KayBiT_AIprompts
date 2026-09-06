@@ -1,0 +1,40 @@
+{
+  "id": "/",
+  "name": "KayBiT_AIprompts — AI Prompting & Curriculum Studio",
+  "short_name": "KayBiT_AI",
+  "description": "Cross-platform multi-agent AI prompting studio and multilingual 19-language curriculum & HTML generator.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#1c2530",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "General AI Agent",
+      "short_name": "AI Agent",
+      "description": "Chat and transmit prompts to AI agents",
+      "url": "/?component=general"
+    },
+    {
+      "name": "Curriculum Generator",
+      "short_name": "Generator",
+      "description": "Generate Topics/Objectives/Prompts and 19-Language HTML docs",
+      "url": "/?component=curriculum"
+    }
+  ]
+}

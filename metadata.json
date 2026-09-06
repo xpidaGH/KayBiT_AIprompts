@@ -1,0 +1,7 @@
+{
+  "name": "KayBiT_AIprompts",
+  "description": "Cross-platform multi-agent AI prompting studio and multilingual 19-language curriculum & HTML document generator for advanced programming students.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

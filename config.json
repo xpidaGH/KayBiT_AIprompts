@@ -1,0 +1,144 @@
+{
+  "application": {
+    "name": "KayBiT_AIprompts",
+    "version": "2.4.0",
+    "environment": "production",
+    "defaultProvider": "Google AI Studio",
+    "defaultModel": "gemini-3.8-flash"
+  },
+  "providers": {
+    "Google AI Studio": {
+      "id": "google_aistudio",
+      "name": "Google AI Studio (Gemini)",
+      "baseUrl": "https://generativelanguage.googleapis.com",
+      "version": "v1beta",
+      "endpoints": {
+        "chat": "/v1beta/models/{model}:generateContent",
+        "stream": "/v1beta/models/{model}:streamGenerateContent",
+        "models": "/v1beta/models"
+      },
+      "models": [
+        { "id": "gemini-3.8-flash", "name": "Gemini 3.8 Flash (Fast & General)", "contextWindow": 1048576, "recommended": true },
+        { "id": "gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro (Deep STEM/Coding)", "contextWindow": 2097152 },
+        { "id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash-Lite (Low Latency)", "contextWindow": 1048576 }
+      ],
+      "authHeader": "x-goog-api-key",
+      "envKey": "GEMINI_API_KEY",
+      "supportsStreaming": true,
+      "supportsAttachments": true,
+      "docsUrl": "https://aistudio.google.com"
+    },
+    "Claude Code": {
+      "id": "claude_code",
+      "name": "Claude Code (Anthropic)",
+      "baseUrl": "https://api.anthropic.com",
+      "version": "2023-06-01",
+      "endpoints": {
+        "chat": "/v1/messages",
+        "stream": "/v1/messages",
+        "models": "/v1/models"
+      },
+      "models": [
+        { "id": "claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet (Hybrid Reasoning)", "contextWindow": 200000, "recommended": true },
+        { "id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet (Coding Specialist)", "contextWindow": 200000 },
+        { "id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku (Rapid Iteration)", "contextWindow": 200000 }
+      ],
+      "authHeader": "x-api-key",
+      "envKey": "ANTHROPIC_API_KEY",
+      "supportsStreaming": true,
+      "supportsAttachments": true,
+      "docsUrl": "https://docs.anthropic.com/en/docs/agents-and-tools/claude-code"
+    },
+    "Cursor": {
+      "id": "cursor",
+      "name": "Cursor AI (Shadow/Composer)",
+      "baseUrl": "https://api.cursor.sh",
+      "version": "v1",
+      "endpoints": {
+        "chat": "/v1/chat/completions",
+        "stream": "/v1/chat/completions",
+        "composer": "/v1/composer"
+      },
+      "models": [
+        { "id": "cursor-fast", "name": "Cursor Fast (Smart Apply)", "contextWindow": 128000, "recommended": true },
+        { "id": "cursor-small", "name": "Cursor Small (Low Latency)", "contextWindow": 64000 },
+        { "id": "claude-3.5-sonnet-cursor", "name": "Claude 3.5 Sonnet (via Cursor)", "contextWindow": 200000 }
+      ],
+      "authHeader": "Authorization",
+      "authPrefix": "Bearer",
+      "envKey": "CURSOR_API_KEY",
+      "supportsStreaming": true,
+      "supportsAttachments": true,
+      "docsUrl": "https://docs.cursor.com"
+    },
+    "GitHub Copilot": {
+      "id": "github_copilot",
+      "name": "GitHub Copilot API",
+      "baseUrl": "https://api.githubcopilot.com",
+      "version": "2024-01-01",
+      "endpoints": {
+        "chat": "/chat/completions",
+        "stream": "/chat/completions",
+        "embeddings": "/embeddings"
+      },
+      "models": [
+        { "id": "copilot-chat", "name": "Copilot Chat (GPT-4o Backend)", "contextWindow": 128000, "recommended": true },
+        { "id": "copilot-claude-3.5-sonnet", "name": "Copilot Claude 3.5 Sonnet", "contextWindow": 128000 },
+        { "id": "copilot-o1", "name": "Copilot o1 (Complex Algorithms)", "contextWindow": 128000 }
+      ],
+      "authHeader": "Authorization",
+      "authPrefix": "Bearer",
+      "envKey": "GITHUB_COPILOT_TOKEN",
+      "supportsStreaming": true,
+      "supportsAttachments": true,
+      "docsUrl": "https://docs.github.com/en/copilot"
+    },
+    "Windsurf": {
+      "id": "windsurf",
+      "name": "Windsurf (Cascade / Codeium)",
+      "baseUrl": "https://api.codeium.com",
+      "version": "v1",
+      "endpoints": {
+        "chat": "/v1/cascade/chat",
+        "stream": "/v1/cascade/stream",
+        "generate": "/v1/code/generate"
+      },
+      "models": [
+        { "id": "cascade-flow", "name": "Cascade Flow (Deep Context)", "contextWindow": 128000, "recommended": true },
+        { "id": "codeium-base", "name": "Codeium Base (Fast Autocomplete)", "contextWindow": 64000 }
+      ],
+      "authHeader": "Authorization",
+      "authPrefix": "Bearer",
+      "envKey": "WINDSURF_API_KEY",
+      "supportsStreaming": true,
+      "supportsAttachments": true,
+      "docsUrl": "https://codeium.com/windsurf"
+    }
+  },
+  "supportedLanguages": [
+    { "code": "en", "name": "English", "native": "English", "dir": "ltr" },
+    { "code": "fr", "name": "French", "native": "Français", "dir": "ltr" },
+    { "code": "de", "name": "German", "native": "Deutsch", "dir": "ltr" },
+    { "code": "it", "name": "Italian", "native": "Italiano", "dir": "ltr" },
+    { "code": "es", "name": "Spanish", "native": "Español", "dir": "ltr" },
+    { "code": "pt", "name": "Portuguese", "native": "Português", "dir": "ltr" },
+    { "code": "id", "name": "Indonesian", "native": "Bahasa Indonesia", "dir": "ltr" },
+    { "code": "sw", "name": "Swahili", "native": "Kiswahili", "dir": "ltr" },
+    { "code": "tr", "name": "Turkish", "native": "Türkçe", "dir": "ltr" },
+    { "code": "ru", "name": "Russian", "native": "Русский", "dir": "ltr" },
+    { "code": "zh", "name": "Chinese", "native": "中文", "dir": "ltr" },
+    { "code": "ja", "name": "Japanese", "native": "日本語", "dir": "ltr" },
+    { "code": "ar", "name": "Arabic", "native": "العربية", "dir": "rtl" },
+    { "code": "ur", "name": "Urdu", "native": "اردو", "dir": "rtl" },
+    { "code": "hi", "name": "Hindi", "native": "हिन्दी", "dir": "ltr" },
+    { "code": "mr", "name": "Marathi", "native": "मराठी", "dir": "ltr" },
+    { "code": "bn", "name": "Bangla", "native": "বাংলা", "dir": "ltr" },
+    { "code": "ta", "name": "Tamil", "native": "தமிழ்", "dir": "ltr" },
+    { "code": "te", "name": "Telugu", "native": "తెలుగు", "dir": "ltr" }
+  ],
+  "programmingLanguages": [
+    "Python", "JavaScript", "TypeScript", "Java", "C#", "Kotlin", "Dart/Flutter",
+    "Bash/Shell", "Rust", "Go (Golang)", "C++", "C", "PHP", "Ruby", "PowerShell",
+    "SQL", "R", "Scala", "MATLAB", "COBOL/Assembly"
+  ]
+}

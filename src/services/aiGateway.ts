@@ -6,7 +6,8 @@ import {
   CurriculumDocument, 
   AIAttachment,
   GenerationRequestPayload,
-  BreadcrumbItem
+  BreadcrumbItem,
+  DifficultyLevel
 } from '../types';
 
 export const AI_PROVIDERS: Record<AIAgentProvider, AIProviderConfig> = configData.providers as Record<AIAgentProvider, AIProviderConfig>;
@@ -167,7 +168,9 @@ export async function generateCurriculumWithAI(
   rawInput?: string,
   programmingLanguages?: string[],
   selectedAI?: AIAgentProvider,
-  targetLanguages?: string[]
+  targetLanguages?: string[],
+  difficulty?: DifficultyLevel,
+  tags?: string[]
 ): Promise<CurriculumDocument> {
   const payload: GenerationRequestPayload = typeof subjectOrPayload === 'string'
     ? {
@@ -175,7 +178,9 @@ export async function generateCurriculumWithAI(
         rawInput: rawInput || '',
         programmingLanguages: programmingLanguages || [],
         selectedAI: selectedAI || 'Google AI Studio',
-        targetLanguages: targetLanguages
+        targetLanguages: targetLanguages,
+        difficulty: difficulty || 'Intermediate',
+        tags: tags || []
       }
     : subjectOrPayload;
 

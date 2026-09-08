@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Sparkles, 
   Cpu, 
@@ -8,18 +8,28 @@ import {
   WifiOff, 
   Layers, 
   FileText,
-  ChevronDown
+  ChevronDown,
+  Globe,
+  Check,
+  Search,
+  Keyboard
 } from 'lucide-react';
 import { AIAgentProvider } from '../types';
-import { AI_PROVIDERS } from '../services/aiGateway';
+import { AI_PROVIDERS, SUPPORTED_LANGUAGES } from '../services/aiGateway';
+import { LANGUAGE_FLAGS, getUiTranslations } from '../services/i18n';
+import { KaybitLogoIcon } from '../data';
 
 interface HeaderProps {
   activeTab: 'general' | 'curriculum';
   setActiveTab: (tab: 'general' | 'curriculum') => void;
   selectedProvider: AIAgentProvider;
   setSelectedProvider: (provider: AIAgentProvider) => void;
+  uiLanguage: string;
+  setUiLanguage: (lang: string) => void;
   onOpenUserGuide: () => void;
   onOpenInstallationGuide: () => void;
+  onOpenShortcuts: () => void;
+  onOpenSplash?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,13 +37,23 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   selectedProvider,
   setSelectedProvider,
+  uiLanguage,
+  setUiLanguage,
   onOpenUserGuide,
-  onOpenInstallationGuide
+  onOpenInstallationGuide,
+  onOpenShortcuts,
+  onOpenSplash
 }) => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
   const [showProviderDropdown, setShowProviderDropdown] = useState<boolean>(false);
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState<boolean>(false);
+  const [langSearchQuery, setLangSearchQuery] = useState<string>('');
+  const [langCategory, setLangCategory] = useState<'all' | 'un' | 'european' | 'asian_indic' | 'rtl'>('all');
+
+  const providerRef = useRef<HTMLDivElement>(null);
+  const languageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -60,11 +80,23 @@ export const Header: React.FC<HeaderProps> = ({
       setIsInstalled(true);
     }
 
+    const handleClickOutside = (event: MouseEvent) => {
+      if (providerRef.current && !providerRef.current.contains(event.target as Node)) {
+        setShowProviderDropdown(false);
+      }
+      if (languageRef.current && !languageRef.current.contains(event.target as Node)) {
+        setShowLanguageDropdown(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handleClickOutside);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
@@ -78,7 +110,33 @@ export const Header: React.FC<HeaderProps> = ({
     setDeferredInstallPrompt(null);
   };
 
-  const currentConfig = AI_PROVIDERS[selectedProvider];
+  const currentLangObj = SUPPORTED_LANGUAGES.find((l) => l.code === uiLanguage) || SUPPORTED_LANGUAGES[0];
+  const currentFlag = LANGUAGE_FLAGS[uiLanguage] || '🌐';
+  const t = getUiTranslations(uiLanguage);
+
+  // Filter languages based on search query and category
+  const filteredLanguages = SUPPORTED_LANGUAGES.filter((lang) => {
+    const matchesSearch = 
+      lang.name.toLowerCase().includes(langSearchQuery.toLowerCase()) ||
+      lang.native.toLowerCase().includes(langSearchQuery.toLowerCase()) ||
+      lang.code.toLowerCase().includes(langSearchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (langCategory === 'un') {
+      return ['en', 'fr', 'es', 'ru', 'zh', 'ar'].includes(lang.code);
+    }
+    if (langCategory === 'european') {
+      return ['en', 'fr', 'de', 'it', 'es', 'pt', 'ru', 'tr'].includes(lang.code);
+    }
+    if (langCategory === 'asian_indic') {
+      return ['zh', 'ja', 'hi', 'mr', 'bn', 'ta', 'te', 'id'].includes(lang.code);
+    }
+    if (langCategory === 'rtl') {
+      return lang.dir === 'rtl';
+    }
+    return true;
+  });
 
   return (
     <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800">
@@ -86,15 +144,18 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-16 gap-2 sm:gap-4">
           
           {/* Brand Logo & Name */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-0.5 shadow-lg shadow-purple-900/30 flex items-center justify-center">
-              <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
-              </div>
+          <div 
+            onClick={onOpenSplash}
+            className={`flex items-center gap-2.5 sm:gap-3 ${onOpenSplash ? 'cursor-pointer' : ''} group`}
+            title="KayBiT AI Studio (Click to view Welcome Splash)"
+          >
+            <div className="relative">
+              <KaybitLogoIcon size={38} className="shadow-md shadow-purple-950/40 rounded-xl transition transform group-hover:scale-105" />
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-full animate-ping opacity-75 pointer-events-none" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-lg sm:text-xl tracking-tight text-white font-heading">
+                <span className="font-bold text-lg sm:text-xl tracking-tight text-white font-heading group-hover:text-purple-300 transition">
                   KayBiT<span className="text-purple-400">_AIprompts</span>
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-semibold border border-purple-500/30 hidden sm:inline">
@@ -131,13 +192,144 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Right Actions: Provider, User Guide, Install, Status */}
+          {/* Right Actions: Provider, Language, User Guide, Install, Status */}
           <div className="flex items-center gap-2">
             
-            {/* AI Provider Selector Dropdown */}
-            <div className="relative">
+            {/* Persistent Global Language Toggle Dropdown */}
+            <div className="relative" ref={languageRef}>
               <button
-                onClick={() => setShowProviderDropdown(!showProviderDropdown)}
+                onClick={() => {
+                  setShowLanguageDropdown(!showLanguageDropdown);
+                  setShowProviderDropdown(false);
+                }}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-200 text-xs rounded-lg border border-slate-800 hover:border-purple-500/40 transition shadow-xs"
+                title="Change global UI & Curriculum language (Persists to local storage & synchronizes all components)"
+              >
+                <Globe className="w-3.5 h-3.5 text-purple-400" />
+                <span className="text-xs">{currentFlag}</span>
+                <span className="font-medium hidden md:inline">{currentLangObj?.native || currentLangObj?.name}</span>
+                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 font-semibold border border-purple-800/40 uppercase">
+                  {uiLanguage}
+                </span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </button>
+
+              {showLanguageDropdown && (
+                <div className="absolute right-0 mt-2 w-72 sm:w-84 bg-slate-900 border border-purple-500/30 rounded-2xl shadow-2xl py-3 px-3 z-50 text-xs space-y-2.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+                    <div className="flex items-center gap-1.5 text-white font-semibold">
+                      <Globe className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Studio Language Preference</span>
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      19 Langs
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-snug">
+                    Synchronizes UI controls, speech dictation locale, and curriculum translation views across all components.
+                  </p>
+
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                    <input
+                      type="text"
+                      value={langSearchQuery}
+                      onChange={(e) => setLangSearchQuery(e.target.value)}
+                      placeholder="Search language (e.g., Spanish, es, 日本語)..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  {/* Quick Category Filter Pills */}
+                  <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-0.5">
+                    {(
+                      [
+                        { id: 'all', label: 'All' },
+                        { id: 'un', label: 'UN (6)' },
+                        { id: 'european', label: 'Euro' },
+                        { id: 'asian_indic', label: 'Asian/Indic' },
+                        { id: 'rtl', label: 'RTL (2)' }
+                      ] as const
+                    ).map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setLangCategory(cat.id)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap transition ${
+                          langCategory === cat.id
+                            ? 'bg-purple-600 text-white font-semibold'
+                            : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Language Options List */}
+                  <div className="max-h-60 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                    {filteredLanguages.map((lang) => {
+                      const isSelected = uiLanguage === lang.code;
+                      const flag = LANGUAGE_FLAGS[lang.code] || '🌐';
+                      return (
+                        <button
+                          key={lang.code}
+                          onClick={() => {
+                            setUiLanguage(lang.code);
+                            setShowLanguageDropdown(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition ${
+                            isSelected
+                              ? 'bg-purple-600/25 text-white border border-purple-500/40 font-semibold'
+                              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm shrink-0">{flag}</span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium truncate">{lang.native}</span>
+                                {lang.native !== lang.name && (
+                                  <span className="text-[10px] text-slate-400">({lang.name})</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {lang.dir === 'rtl' && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono">
+                                RTL
+                              </span>
+                            )}
+                            <span className="font-mono text-[10px] text-slate-400 uppercase">
+                              {lang.code}
+                            </span>
+                            {isSelected && (
+                              <Check className="w-3.5 h-3.5 text-purple-400" />
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    {filteredLanguages.length === 0 && (
+                      <div className="py-4 text-center text-xs text-slate-500">
+                        No languages found matching "{langSearchQuery}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* AI Provider Selector Dropdown */}
+            <div className="relative" ref={providerRef}>
+              <button
+                onClick={() => {
+                  setShowProviderDropdown(!showProviderDropdown);
+                  setShowLanguageDropdown(false);
+                }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-200 text-xs rounded-lg border border-slate-800 transition"
                 title="Select active AI Assistant Engine"
               >
@@ -177,6 +369,20 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Keyboard Shortcuts Button */}
+            <button
+              onClick={onOpenShortcuts}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-medium rounded-lg border border-slate-800 hover:border-amber-500/40 transition group"
+              title="View Global Keyboard Shortcuts (?)"
+              aria-label="View Keyboard Shortcuts"
+            >
+              <Keyboard className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition-transform" />
+              <span className="hidden lg:inline">Shortcuts</span>
+              <kbd className="hidden sm:inline-block px-1 py-0.2 rounded bg-slate-950 border border-slate-700 font-mono text-[9px] text-amber-300">
+                ?
+              </kbd>
+            </button>
 
             {/* User Guide Button */}
             <button

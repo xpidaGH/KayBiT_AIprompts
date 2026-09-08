@@ -21,13 +21,18 @@ import {
   SlidersHorizontal,
   Archive,
   Search,
-  Filter
+  Filter,
+  Tag,
+  GraduationCap,
+  Code,
+  Edit3
 } from 'lucide-react';
 import { 
   CurriculumDocument, 
   BreadcrumbItem, 
   CurriculumChapter, 
-  AIAgentProvider 
+  AIAgentProvider,
+  DifficultyLevel
 } from '../types';
 import { 
   PROGRAMMING_LANGUAGES, 
@@ -41,18 +46,28 @@ import {
   generateConsolidatedReadme,
   downloadZipArchive
 } from '../services/htmlGenerator';
+import { exportCurriculumToPdf } from '../services/pdfGenerator';
+import { CurriculumFloatingExportMenu } from './CurriculumFloatingExportMenu';
+import { CurriculumTagModal } from './CurriculumTagModal';
+import { CurriculumProjectFilterBar, DIFFICULTY_BADGES } from './CurriculumProjectFilterBar';
 import { PRESET_CURRICULA } from '../services/sampleCurricula';
+import { LANGUAGE_FLAGS, getUiTranslations } from '../services/i18n';
+import { PrismContentRenderer } from './PrismContentRenderer';
 
 interface CurriculumGeneratorComponentProps {
   onTransmitToAgent: (prompt: string) => void;
   onOpenPreview: (doc: CurriculumDocument, lang: string) => void;
   incomingTopicText?: string;
+  uiLanguage?: string;
+  setUiLanguage?: (lang: string) => void;
 }
 
 export const CurriculumGeneratorComponent: React.FC<CurriculumGeneratorComponentProps> = ({
   onTransmitToAgent,
   onOpenPreview,
-  incomingTopicText = ''
+  incomingTopicText = '',
+  uiLanguage = 'en',
+  setUiLanguage
 }) => {
   // Input State
   const [subject, setSubject] = useState<string>('cloud_devops');
@@ -63,9 +78,73 @@ export const CurriculumGeneratorComponent: React.FC<CurriculumGeneratorComponent
   const [selectedLangs, setSelectedLangs] = useState<string[]>(['Go', 'Rust', 'TypeScript', 'Python']);
   const [selectedTargetAI, setSelectedTargetAI] = useState<AIAgentProvider>('Google AI Studio');
 
-  // Curricula Collection State (initialized with presets)
-  const [curricula, setCurricula] = useState<CurriculumDocument[]>(PRESET_CURRICULA);
-  const [activeCurriculumId, setActiveCurriculumId] = useState<string>(PRESET_CURRICULA[0].id);
+  // Tagging & Difficulty Selection for Generation
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>('Intermediate');
+  const [generationTags, setGenerationTags] = useState<string[]>(['FullStack', 'DevOps']);
+  const [newTagInput, setNewTagInput] = useState<string>('');
+  const [editingDocumentForTags, setEditingDocumentForTags] = useState<CurriculumDocument | null>(null);
+
+  // Curricula Collection State with LocalStorage Persistence
+  const SAVED_CURRICULA_KEY = 'kaybit_saved_curricula';
+  const [curricula, setCurricula] = useState<CurriculumDocument[]>(() => {
+    try {
+      const saved = localStorage.getItem('kaybit_saved_curricula');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const presetIds = new Set(PRESET_CURRICULA.map(p => p.id));
+          const customSaved = parsed.filter((c: CurriculumDocument) => !presetIds.has(c.id));
+          const presetsMerged = PRESET_CURRICULA.map(preset => {
+            const found = parsed.find((c: CurriculumDocument) => c.id === preset.id);
+            return found ? { ...preset, ...found } : preset;
+          });
+          return [...presetsMerged, ...customSaved];
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load saved curricula from localStorage', e);
+    }
+    return PRESET_CURRICULA;
+  });
+
+  const [activeCurriculumId, setActiveCurriculumId] = useState<string>(() => {
+    return PRESET_CURRICULA[0]?.id || 'antivirus';
+  });
+
+  // Persist curricula updates into localStorage
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(SAVED_CURRICULA_KEY, JSON.stringify(curricula));
+    } catch (e) {
+      console.error('Failed to save curricula to localStorage', e);
+    }
+  }, [curricula]);
+
+  const handleAddGenerationTag = (tag: string) => {
+    const clean = tag.trim().replace(/^#/, '');
+    if (clean && !generationTags.some(t => t.toLowerCase() === clean.toLowerCase())) {
+      setGenerationTags([...generationTags, clean]);
+      setNewTagInput('');
+    }
+  };
+
+  const handleRemoveGenerationTag = (tagToRemove: string) => {
+    setGenerationTags(generationTags.filter(t => t !== tagToRemove));
+  };
+
+  const handleSaveDocumentTags = (updatedDoc: CurriculumDocument) => {
+    setCurricula(prev => prev.map(c => c.id === updatedDoc.id ? updatedDoc : c));
+  };
+
+  const handleDeleteCurriculum = (docId: string) => {
+    setCurricula(prev => {
+      const updated = prev.filter(c => c.id !== docId);
+      if (activeCurriculumId === docId && updated.length > 0) {
+        setActiveCurriculumId(updated[0].id);
+      }
+      return updated;
+    });
+  };
 
   // Target Curriculum Languages Selection for Generation (19 Languages) - Default to English only rather than all by default
   const [selectedGenLangs, setSelectedGenLangs] = useState<string[]>(['en']);
@@ -75,7 +154,15 @@ export const CurriculumGeneratorComponent: React.FC<CurriculumGeneratorComponent
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedPromptId, setCopiedPromptId] = useState<number | null>(null);
-  const [previewLang, setPreviewLang] = useState<string>('en');
+  const [previewLang, setPreviewLang] = useState<string>(uiLanguage || 'en');
+
+  // Synchronize preview language and target generator languages with persistent global uiLanguage
+  React.useEffect(() => {
+    if (uiLanguage) {
+      setPreviewLang(uiLanguage);
+      setSelectedGenLangs((prev) => (prev.includes(uiLanguage) ? prev : [...prev, uiLanguage]));
+    }
+  }, [uiLanguage]);
 
   // Preview Language Filter State
   const [previewCategoryFilter, setPreviewCategoryFilter] = useState<'all' | 'available' | 'un' | 'european' | 'asian_indic' | 'rtl'>('all');
@@ -89,6 +176,11 @@ export const CurriculumGeneratorComponent: React.FC<CurriculumGeneratorComponent
   const [zipStatus, setZipStatus] = useState<string | null>(null);
   const [showZipModal, setShowZipModal] = useState<boolean>(false);
   const [selectedExportLangs, setSelectedExportLangs] = useState<string[]>(SUPPORTED_LANGUAGES.map(l => l.code));
+
+  // PDF Export State
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [pdfSuccessMessage, setPdfSuccessMessage] = useState<string | null>(null);
+  const [rawPromptModes, setRawPromptModes] = useState<Record<number, boolean>>({});
 
   // File Upload Ref
   const outlineFileInputRef = useRef<HTMLInputElement>(null);
@@ -264,7 +356,9 @@ export const CurriculumGeneratorComponent: React.FC<CurriculumGeneratorComponent
         rawInput,
         selectedLangs,
         selectedTargetAI,
-        selectedGenLangs
+        selectedGenLangs,
+        difficulty,
+        generationTags
       );
 
       // Add to state and make active
@@ -353,6 +447,28 @@ export const CurriculumGeneratorComponent: React.FC<CurriculumGeneratorComponent
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPdf = (langCode?: string) => {
+    if (!activeDocument) return;
+    const targetLang = langCode || previewLang || 'en';
+    setIsExportingPdf(true);
+    setPdfSuccessMessage(null);
+
+    try {
+      exportCurriculumToPdf(activeDocument, {
+        languageCode: targetLang,
+        breadcrumbs: masterBreadcrumbs,
+        includeCritiques: true
+      });
+      const langName = SUPPORTED_LANGUAGES.find(l => l.code === targetLang)?.name || targetLang;
+      setPdfSuccessMessage(`Exported PDF for ${activeDocument.title} (${langName})`);
+      setTimeout(() => setPdfSuccessMessage(null), 4000);
+    } catch (err: any) {
+      setErrorMsg('Failed to export PDF: ' + (err?.message || 'Unknown error occurred.'));
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -417,6 +533,19 @@ export const CurriculumGeneratorComponent: React.FC<CurriculumGeneratorComponent
           </div>
         </div>
       </div>
+
+      {/* Saved Curriculum Projects & Category / Difficulty / Tag Filter Hub */}
+      <CurriculumProjectFilterBar
+        curricula={curricula}
+        activeCurriculumId={activeCurriculumId}
+        onSelectCurriculum={(id) => {
+          setActiveCurriculumId(id);
+          const found = curricula.find(c => c.id === id);
+          if (found) setSubject(found.subject);
+        }}
+        onOpenTagModal={(doc) => setEditingDocumentForTags(doc)}
+        onDeleteCurriculum={handleDeleteCurriculum}
+      />
 
       {/* Generation Workspace: Input Form */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -483,6 +612,114 @@ export const CurriculumGeneratorComponent: React.FC<CurriculumGeneratorComponent
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Target Difficulty Level Selector */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <GraduationCap className="w-3.5 h-3.5 text-purple-400" />
+                  Target Difficulty Level
+                </span>
+                <span className="text-[11px] font-mono text-purple-300 font-semibold">{difficulty}</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {(['Beginner', 'Intermediate', 'Advanced', 'Expert'] as DifficultyLevel[]).map((level) => {
+                  const isSelected = difficulty === level;
+                  const icons: Record<DifficultyLevel, string> = {
+                    Beginner: '🌱',
+                    Intermediate: '🎓',
+                    Advanced: '⚡',
+                    Expert: '🔥'
+                  };
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setDifficulty(level)}
+                      className={`px-2 py-1.5 rounded-lg border text-xs font-medium transition flex items-center justify-center gap-1 select-none ${
+                        isSelected
+                          ? 'bg-purple-600 border-purple-500 text-white font-semibold shadow-xs'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                      }`}
+                    >
+                      <span>{icons[level]}</span>
+                      <span>{level}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Custom Project Tags for Generation */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-purple-400" />
+                <span>Project Tags ({generationTags.length})</span>
+              </label>
+
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-xs">#</span>
+                  <input
+                    type="text"
+                    value={newTagInput}
+                    onChange={(e) => setNewTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddGenerationTag(newTagInput);
+                      }
+                    }}
+                    placeholder="e.g. Capstone, Microservices (press Enter)"
+                    className="w-full pl-6 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder:text-slate-500 focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleAddGenerationTag(newTagInput)}
+                  disabled={!newTagInput.trim()}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 disabled:opacity-40 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition shrink-0"
+                >
+                  + Add
+                </button>
+              </div>
+
+              {/* Tag Chips */}
+              {generationTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {generationTags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-500/15 border border-purple-500/30 text-purple-300"
+                    >
+                      <span>#{tag}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveGenerationTag(tag)}
+                        className="hover:text-white rounded-full p-0.5 hover:bg-purple-500/30 transition"
+                        title={`Remove tag #${tag}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Quick Suggestions */}
+              <div className="flex flex-wrap gap-1 pt-0.5">
+                {['Security', 'DevOps', 'Cloud', 'FinTech', 'FullStack', 'CTF', 'WebSockets', 'AI'].filter(t => !generationTags.includes(t)).slice(0, 5).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => handleAddGenerationTag(t)}
+                    className="px-1.5 py-0.5 text-[10px] rounded bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-purple-300 border border-slate-800 transition"
+                  >
+                    + #{t}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -816,6 +1053,26 @@ Objectives: Build a concurrent pipeline in Go or Rust processing ERP transaction
                   <Eye className="w-3.5 h-3.5 text-purple-400" /> Preview HTML
                 </button>
 
+                {/* Export Current Document as PDF using jsPDF */}
+                <button
+                  onClick={() => handleExportPdf(previewLang)}
+                  disabled={isExportingPdf}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition shadow shadow-rose-900/40"
+                  title="Export current curriculum document as a formatted PDF using jsPDF"
+                >
+                  {isExportingPdf ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Generating PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Export PDF</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   onClick={() => handleExportZip()}
                   disabled={isExportingZip}
@@ -835,6 +1092,54 @@ Objectives: Build a concurrent pipeline in Go or Rust processing ERP transaction
                   )}
                 </button>
               </div>
+            </div>
+
+            {/* Active Document Metadata: Difficulty, Programming Languages & Tags */}
+            <div className="flex items-center justify-between gap-3 flex-wrap pt-2.5 pb-1 border-t border-slate-800/60 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Difficulty Level */}
+                {activeDocument.difficulty && (
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${DIFFICULTY_BADGES[activeDocument.difficulty]?.badgeClass || 'bg-slate-800 text-slate-300'}`}>
+                    <span>{DIFFICULTY_BADGES[activeDocument.difficulty]?.icon || '🎓'}</span>
+                    <span>{activeDocument.difficulty} Level</span>
+                  </span>
+                )}
+
+                {/* Programming Languages */}
+                {activeDocument.programmingLanguages && activeDocument.programmingLanguages.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Code className="w-3.5 h-3.5 text-slate-400" />
+                    {activeDocument.programmingLanguages.map(lang => (
+                      <span key={lang} className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-950 text-slate-300 border border-slate-800">
+                        {lang}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Custom Tags */}
+                {activeDocument.tags && activeDocument.tags.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Tag className="w-3.5 h-3.5 text-purple-400" />
+                    {activeDocument.tags.map(t => (
+                      <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300">
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Edit Tags & Level Button */}
+              <button
+                type="button"
+                onClick={() => setEditingDocumentForTags(activeDocument)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-medium border border-slate-700 hover:border-purple-500/50 transition shrink-0"
+                title="Edit curriculum difficulty level, programming languages, and custom tags"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-purple-400" />
+                <span>Edit Tags & Level</span>
+              </button>
             </div>
 
             {/* 19-Language Selector Tabs for Live Preview with Filtering */}
@@ -896,13 +1201,30 @@ Objectives: Build a concurrent pipeline in Go or Rust processing ERP transaction
 
                   <button
                     onClick={() => handleDownloadSingleLang(previewLang)}
-                    className="text-purple-400 hover:text-purple-300 text-[11px] flex items-center gap-1 font-mono whitespace-nowrap"
+                    className="text-purple-400 hover:text-purple-300 text-[11px] flex items-center gap-1 font-mono whitespace-nowrap bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 hover:border-purple-500/40 transition"
                     title={`Download standalone ${activeDocument.subject}_${previewLang}.html`}
                   >
                     <Download className="w-3 h-3" /> {activeDocument.subject}_{previewLang}.html
                   </button>
+
+                  <button
+                    onClick={() => handleExportPdf(previewLang)}
+                    disabled={isExportingPdf}
+                    className="text-rose-400 hover:text-rose-300 text-[11px] flex items-center gap-1 font-mono whitespace-nowrap bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 hover:border-rose-500/40 transition disabled:opacity-50"
+                    title={`Export ${SUPPORTED_LANGUAGES.find(l => l.code === previewLang)?.name || previewLang} document as PDF`}
+                  >
+                    <FileText className="w-3 h-3 text-rose-400" /> Export PDF ({previewLang.toUpperCase()})
+                  </button>
                 </div>
               </div>
+
+              {/* PDF Export Success Banner */}
+              {pdfSuccessMessage && (
+                <div className="flex items-center gap-2 p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 animate-in fade-in duration-200">
+                  <CheckCircle2 className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="font-medium">{pdfSuccessMessage}</span>
+                </div>
+              )}
 
               {/* Filtered 19-Language Tabs Ribbon */}
               <div className="space-y-1.5">
@@ -924,7 +1246,12 @@ Objectives: Build a concurrent pipeline in Go or Rust processing ERP transaction
                       return (
                         <button
                           key={lang.code}
-                          onClick={() => setPreviewLang(lang.code)}
+                          onClick={() => {
+                            setPreviewLang(lang.code);
+                            if (setUiLanguage) {
+                              setUiLanguage(lang.code);
+                            }
+                          }}
                           className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono transition whitespace-nowrap ${
                             isSelected
                               ? 'bg-purple-600 text-white font-bold shadow-sm'
@@ -943,18 +1270,25 @@ Objectives: Build a concurrent pipeline in Go or Rust processing ERP transaction
                 </div>
 
                 {/* Current Active Language Banner Info */}
-                <div className="flex items-center justify-between text-[11px] text-slate-400 px-0.5">
-                  <span className="flex items-center gap-2">
+                <div className="flex items-center justify-between text-[11px] text-slate-400 px-0.5 flex-wrap gap-2">
+                  <span className="flex items-center gap-2 flex-wrap">
+                    <span className="flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-purple-400" />
+                      <span>
+                        Global UI: <strong className="text-white">{LANGUAGE_FLAGS[uiLanguage] || '🌐'} {SUPPORTED_LANGUAGES.find(l => l.code === uiLanguage)?.native || uiLanguage}</strong>
+                      </span>
+                    </span>
+                    <span className="text-slate-700 hidden sm:inline">•</span>
                     <span>
-                      Active Preview: <strong className="text-purple-300">{SUPPORTED_LANGUAGES.find(l => l.code === previewLang)?.name || previewLang}</strong> ({previewLang.toUpperCase()})
+                      Active Doc: <strong className="text-purple-300">{SUPPORTED_LANGUAGES.find(l => l.code === previewLang)?.name || previewLang}</strong> ({previewLang.toUpperCase()})
                     </span>
                     {availableLanguagesInDoc.has(previewLang) ? (
-                      <span className="text-emerald-400 text-[10px] flex items-center gap-1">
+                      <span className="text-emerald-400 text-[10px] flex items-center gap-1 bg-emerald-950/50 px-1.5 py-0.2 rounded border border-emerald-800/40 font-medium">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                         Full Translation
                       </span>
                     ) : (
-                      <span className="text-amber-400 text-[10px] flex items-center gap-1">
+                      <span className="text-amber-400 text-[10px] flex items-center gap-1 bg-amber-950/50 px-1.5 py-0.2 rounded border border-amber-800/40 font-medium">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                         English fallback
                       </span>
@@ -1036,14 +1370,44 @@ Objectives: Build a concurrent pipeline in Go or Rust processing ERP transaction
                     </div>
                   </div>
 
-                  {/* Prompt Box */}
-                  <div className="space-y-1 pt-1">
+                  {/* Prompt Box with Prism.js Highlighting */}
+                  <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span className="font-semibold text-slate-300">AI Prompt (English):</span>
-                      <span className="font-mono text-[10px] text-slate-500">Ready for Claude Code, Cursor, Copilot, Gemini</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-300">AI Prompt (English):</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-950/60 border border-purple-800/40 text-purple-300 flex items-center gap-1">
+                          <Code2 className="w-3 h-3 text-purple-400" />
+                          Prism.js Highlighted
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRawPromptModes(prev => ({
+                              ...prev,
+                              [chapter.id]: !prev[chapter.id]
+                            }));
+                          }}
+                          className="font-mono text-[10px] text-slate-400 hover:text-purple-300 transition underline underline-offset-2"
+                          title="Toggle between highlighted code view and raw text"
+                        >
+                          {rawPromptModes[chapter.id] ? 'Switch to Highlighted' : 'View Raw'}
+                        </button>
+                        <span className="font-mono text-[10px] text-slate-500 hidden sm:inline">Ready for Claude Code, Cursor, Copilot</span>
+                      </div>
                     </div>
-                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80 font-mono text-xs text-slate-200 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
-                      {chapter.prompt}
+
+                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80 font-mono text-xs text-slate-200 max-h-56 overflow-y-auto leading-relaxed">
+                      {rawPromptModes[chapter.id] ? (
+                        <div className="whitespace-pre-wrap">{chapter.prompt}</div>
+                      ) : (
+                        <PrismContentRenderer
+                          content={chapter.prompt}
+                          defaultLanguage={activeDocument.programmingLanguages?.[0]?.toLowerCase()}
+                          compact
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -1056,9 +1420,19 @@ Objectives: Build a concurrent pipeline in Go or Rust processing ERP transaction
                       </div>
                       {chapter.improvedPrompt && (
                         <div className="space-y-1">
-                          <span className="text-[11px] font-semibold text-emerald-400">Refined High-Precision Prompt:</span>
-                          <div className="p-2.5 bg-slate-950 rounded-lg border border-emerald-500/20 text-emerald-200/90 text-xs font-mono whitespace-pre-wrap">
-                            {chapter.improvedPrompt}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold text-emerald-400">Refined High-Precision Prompt:</span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-950/60 border border-emerald-800/40 text-emerald-300 flex items-center gap-1">
+                              <Code2 className="w-3 h-3 text-emerald-400" />
+                              Prism.js
+                            </span>
+                          </div>
+                          <div className="p-2.5 bg-slate-950 rounded-lg border border-emerald-500/20 text-emerald-200/90 text-xs font-mono max-h-48 overflow-y-auto">
+                            <PrismContentRenderer
+                              content={chapter.improvedPrompt}
+                              defaultLanguage={activeDocument.programmingLanguages?.[0]?.toLowerCase()}
+                              compact
+                            />
                           </div>
                         </div>
                       )}
@@ -1226,6 +1600,25 @@ Objectives: Build a concurrent pipeline in Go or Rust processing ERP transaction
 
           </div>
         </div>
+      )}
+
+      {/* Floating Action Menu for Exporting as JSON, Markdown, HTML */}
+      <CurriculumFloatingExportMenu
+        document={activeDocument}
+        currentLang={previewLang}
+        breadcrumbs={masterBreadcrumbs}
+        onExportPdf={(lang) => handleExportPdf(lang)}
+        onExportZip={() => setShowZipModal(true)}
+      />
+
+      {/* Edit Tags & Category Modal */}
+      {editingDocumentForTags && (
+        <CurriculumTagModal
+          isOpen={!!editingDocumentForTags}
+          onClose={() => setEditingDocumentForTags(null)}
+          document={editingDocumentForTags}
+          onSave={handleSaveDocumentTags}
+        />
       )}
 
     </div>

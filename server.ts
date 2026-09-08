@@ -94,7 +94,7 @@ app.post('/api/ai/transmit', async (req, res) => {
 // Component 2: Topics/Objectives/Prompts & 19-Language Curriculum Generator
 app.post('/api/ai/generate-curriculum', async (req, res) => {
   try {
-    const { subject, rawInput, programmingLanguages, selectedAI, targetLanguages } = req.body;
+    const { subject, rawInput, programmingLanguages, selectedAI, targetLanguages, difficulty, tags } = req.body;
 
     if (!subject || !rawInput) {
       return res.status(400).json({ error: 'Subject and raw Topics/Objectives input are required.' });
@@ -171,14 +171,17 @@ Generate the structured chapters with translations for the requested languages (
     }
 
     const docResult = {
-      id: subject.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+      id: subject.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString(36),
       subject: subject.toLowerCase().replace(/[^a-z0-9]/g, '_'),
       title: parsedData.title || `${subject} — AI Prompts for Student Discussions`,
       subtitle: parsedData.subtitle || 'Real-World Application Prompts — Advanced Students',
       brandSub: parsedData.brandSub || 'Byte Technologies — Advanced',
       chapters: parsedData.chapters || [],
       createdAt: new Date().toISOString().split('T')[0],
-      sourceType: 'generated'
+      sourceType: 'generated',
+      difficulty: difficulty || 'Intermediate',
+      programmingLanguages: Array.isArray(programmingLanguages) && programmingLanguages.length > 0 ? programmingLanguages : ['Multi-language'],
+      tags: Array.isArray(tags) && tags.length > 0 ? tags : ['Curriculum', subject]
     };
 
     res.json(docResult);

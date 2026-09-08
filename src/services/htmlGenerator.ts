@@ -1,39 +1,9 @@
 import JSZip from 'jszip';
 import { CurriculumDocument, CurriculumChapter, LanguageInfo, BreadcrumbItem } from '../types';
 import { SUPPORTED_LANGUAGES } from './aiGateway';
+import { LOCALIZED_LABELS, getLocalizedDocLabels } from '../data';
 
-// Localized UI labels for the 19 languages
-export const LOCALIZED_LABELS: Record<string, {
-  toc: string;
-  backToToc: string;
-  topic: string;
-  objective: string;
-  prompt: string;
-  critique: string;
-  improvedPrompt: string;
-  copy: string;
-  copied: string;
-}> = {
-  en: { toc: "Table of Contents", backToToc: "TOC", topic: "Topic", objective: "Objective", prompt: "Prompt", critique: "Critique", improvedPrompt: "Improved Prompt", copy: "Copy", copied: "Copied!" },
-  fr: { toc: "Table des matières", backToToc: "Sommaire", topic: "Sujet", objective: "Objectif", prompt: "Prompt", critique: "Critique", improvedPrompt: "Prompt amélioré", copy: "Copier", copied: "Copié !" },
-  de: { toc: "Inhaltsverzeichnis", backToToc: "Inhalt", topic: "Thema", objective: "Ziel", prompt: "Prompt", critique: "Kritik", improvedPrompt: "Verbesserter Prompt", copy: "Kopieren", copied: "Kopiert!" },
-  it: { toc: "Indice", backToToc: "Indice", topic: "Argomento", objective: "Obiettivo", prompt: "Prompt", critique: "Critica", improvedPrompt: "Prompt migliorato", copy: "Copia", copied: "Copiato!" },
-  es: { toc: "Índice", backToToc: "Índice", topic: "Tema", objective: "Objetivo", prompt: "Prompt", critique: "Crítica", improvedPrompt: "Prompt mejorado", copy: "Copiar", copied: "¡Copiado!" },
-  pt: { toc: "Índice", backToToc: "Índice", topic: "Tópico", objective: "Objetivo", prompt: "Prompt", critique: "Crítica", improvedPrompt: "Prompt aprimorado", copy: "Copiar", copied: "Copiado!" },
-  id: { toc: "Daftar Isi", backToToc: "Daftar Isi", topic: "Topik", objective: "Tujuan", prompt: "Prompt", critique: "Kritik", improvedPrompt: "Prompt yang disempurnakan", copy: "Salin", copied: "Tersalin!" },
-  sw: { toc: "Yaliyomo", backToToc: "Yaliyomo", topic: "Mada", objective: "Lengo", prompt: "Prompt", critique: "Uhakiki", improvedPrompt: "Prompt iliyoboreshwa", copy: "Nakili", copied: "Imenakiliwa!" },
-  tr: { toc: "İçindekiler", backToToc: "İçindekiler", topic: "Konu", objective: "Hedef", prompt: "Prompt", critique: "Eleştiri", improvedPrompt: "Geliştirilmiş Prompt", copy: "Kopyala", copied: "Kopyalandı!" },
-  ru: { toc: "Содержание", backToToc: "Содержание", topic: "Тема", objective: "Цель", prompt: "Промпт", critique: "Критика", improvedPrompt: "Улучшенный промпт", copy: "Копировать", copied: "Скопировано!" },
-  zh: { toc: "目录", backToToc: "目录", topic: "主题", objective: "目标", prompt: "提示词 (Prompt)", critique: "评价", improvedPrompt: "改进版提示词", copy: "复制", copied: "已复制！" },
-  ja: { toc: "目次", backToToc: "目次", topic: "トピック", objective: "目標", prompt: "プロンプト (Prompt)", critique: "講評", improvedPrompt: "改善されたプロンプト", copy: "コピー", copied: "コピー完了！" },
-  ar: { toc: "جدول المحتويات", backToToc: "المحتويات", topic: "الموضوع", objective: "الهدف", prompt: "المطالبة (Prompt)", critique: "النقد", improvedPrompt: "المطالبة المحسنة", copy: "نسخ", copied: "تم النسخ!" },
-  ur: { toc: "فہرست عنوانات", backToToc: "فہرست", topic: "عنوان", objective: "مقصد", prompt: "پرامپٹ (Prompt)", critique: "تنقید", improvedPrompt: "بہتر پرامپٹ", copy: "کاپی کریں", copied: "کاپی ہو گیا!" },
-  hi: { toc: "विषय सूची", backToToc: "सूची", topic: "विषय", objective: "उद्देश्य", prompt: "प्रॉम्प्ट (Prompt)", critique: "समीक्षा", improvedPrompt: "बेहतर प्रॉम्प्ट", copy: "कॉपी करें", copied: "कॉपी हो गया!" },
-  mr: { toc: "अनुक्रमणिका", backToToc: "सूची", topic: "विषय", objective: "उद्दिष्ट", prompt: "प्रॉम्प्ट (Prompt)", critique: "समीक्षा", improvedPrompt: "सुधारित प्रॉम्प्ट", copy: "कॉपी करा", copied: "कॉपी झाले!" },
-  bn: { toc: "সূচিপত্র", backToToc: "সূচিপত্র", topic: "বিষয়", objective: "উদ্দেশ্য", prompt: "প্রম্পট (Prompt)", critique: "পর্যালোচনা", improvedPrompt: "উন্নত প্রম্পট", copy: "কপি করুন", copied: "কপি হয়েছে!" },
-  ta: { toc: "பொருளடக்கம்", backToToc: "பொருளடக்கம்", topic: "தலைப்பு", objective: "நோக்கம்", prompt: "ப்ராம்ப்ட் (Prompt)", critique: "விமர்சனம்", improvedPrompt: "மேம்படுத்தப்பட்ட ப்ராம்ப்ட்", copy: "நகலெடு", copied: "நகலெடுக்கப்பட்டது!" },
-  te: { toc: "విషయ సూచిక", backToToc: "సూచిక", topic: "అంశం", objective: "లక్ష్యం", prompt: "ప్రాంప్ట్ (Prompt)", critique: "సమీక్ష", improvedPrompt: "మెరుగైన ప్రాంప్ట్", copy: "కాపీ చేయి", copied: "కాపీ అయింది!" }
-};
+export { LOCALIZED_LABELS };
 
 /**
  * Escapes HTML characters
@@ -538,4 +508,74 @@ export async function downloadZipArchive(
     totalFiles: fileCount,
     sizeBytes: blob.size
   };
+}
+
+/**
+ * Formats curriculum document as clean Markdown / IDE content for external editors (VS Code, Cursor, Windsurf, JetBrains)
+ */
+export function generateCurriculumIdeContent(doc: CurriculumDocument, lang: string = 'en'): string {
+  const langInfo = SUPPORTED_LANGUAGES.find(l => l.code === lang) || { name: 'English', native: 'English', code: 'en' };
+  
+  const lines: string[] = [];
+  lines.push(`# ${doc.title || doc.subject}`);
+  lines.push('');
+  lines.push(`> **Subject:** ${doc.subject} | **Language:** ${langInfo.name} (${langInfo.native}) [\`${langInfo.code}\`] | **Chapters:** ${doc.chapters.length}`);
+  if (doc.difficulty) lines.push(`> **Difficulty Level:** ${doc.difficulty}`);
+  if (doc.programmingLanguages && doc.programmingLanguages.length > 0) {
+    lines.push(`> **Target Stack:** ${doc.programmingLanguages.join(', ')}`);
+  }
+  if (doc.tags && doc.tags.length > 0) {
+    lines.push(`> **Tags:** ${doc.tags.join(', ')}`);
+  }
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+
+  doc.chapters.forEach((ch, idx) => {
+    const tr = ch.translations?.[lang] || { topic: ch.topic, objective: ch.objective };
+    const num = ch.numStr || String(idx + 1).padStart(2, '0');
+    
+    lines.push(`## Chapter ${num}: ${ch.title}`);
+    lines.push('');
+    lines.push(`### Topic (${lang.toUpperCase()})`);
+    lines.push(tr.topic || ch.topic);
+    lines.push('');
+    lines.push(`### Objective (${lang.toUpperCase()})`);
+    lines.push(tr.objective || ch.objective);
+    lines.push('');
+    lines.push('### AI Prompt (Copy to Coding Assistant)');
+    lines.push('```');
+    lines.push(ch.prompt);
+    lines.push('```');
+    
+    if (ch.improvedPrompt) {
+      lines.push('');
+      lines.push('### Refined / Improved Prompt');
+      lines.push('```');
+      lines.push(ch.improvedPrompt);
+      lines.push('```');
+    }
+    
+    if (ch.critique) {
+      lines.push('');
+      lines.push(`> **Critique / Guidance:** ${ch.critique}`);
+    }
+    
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  });
+
+  lines.push(`*Generated by KayBiT_AIprompts. Formatted for external IDE integration (Cursor, Windsurf, VS Code, Claude Code).*`);
+  return lines.join('\n');
+}
+
+/**
+ * Extracts pure AI prompts from curriculum document ready for LLM chat windows
+ */
+export function generateCurriculumPromptsOnly(doc: CurriculumDocument): string {
+  return doc.chapters.map((ch, idx) => {
+    const num = ch.numStr || String(idx + 1).padStart(2, '0');
+    return `// ==========================================\n// CHAPTER ${num}: ${ch.title.toUpperCase()}\n// ==========================================\n\n${ch.prompt}\n`;
+  }).join('\n');
 }

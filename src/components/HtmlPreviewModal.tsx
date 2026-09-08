@@ -1,8 +1,31 @@
-import React, { useState, useMemo } from 'react';
-import { X, Globe, Download, Copy, Code, Eye, ExternalLink, Check, Search, Filter } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { 
+  X, 
+  Globe, 
+  Download, 
+  Copy, 
+  Code, 
+  Eye, 
+  ExternalLink, 
+  Check, 
+  Search, 
+  Filter, 
+  FileText, 
+  ChevronDown, 
+  Terminal,
+  Sparkles,
+  Volume2,
+  VolumeX
+} from 'lucide-react';
 import { CurriculumDocument, BreadcrumbItem } from '../types';
-import { generateLanguageHtmlDocument } from '../services/htmlGenerator';
+import { 
+  generateLanguageHtmlDocument, 
+  generateCurriculumIdeContent, 
+  generateCurriculumPromptsOnly 
+} from '../services/htmlGenerator';
 import { SUPPORTED_LANGUAGES } from '../services/aiGateway';
+import { PrismCodeBlock } from './PrismCodeBlock';
+import { CurriculumTtsPlayer } from './CurriculumTtsPlayer';
 
 interface HtmlPreviewModalProps {
   isOpen: boolean;
@@ -20,13 +43,39 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
   initialLang = 'en'
 }) => {
   const [currentLang, setCurrentLang] = useState<string>(initialLang);
-  const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview');
-  const [copiedSource, setCopiedSource] = useState(false);
+  const [viewMode, setViewMode] = useState<'preview' | 'ide' | 'source'>('preview');
+  const [copiedFormat, setCopiedFormat] = useState<'ide' | 'html' | 'prompts' | null>(null);
+  const [showCopyMenu, setShowCopyMenu] = useState<boolean>(false);
+  const [copyFeedback, setCopyFeedback] = useState<{ text: string; details?: string } | null>(null);
+  const [showTtsPlayer, setShowTtsPlayer] = useState<boolean>(false);
   const [filterCategory, setFilterCategory] = useState<'all' | 'un' | 'european' | 'asian_indic' | 'rtl'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const copyMenuRef = useRef<HTMLDivElement>(null);
+
+  // Stop speech when modal is closed or unmounted
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [isOpen]);
+
+  // Close copy menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (copyMenuRef.current && !copyMenuRef.current.contains(e.target as Node)) {
+        setShowCopyMenu(false);
+      }
+    };
+    if (showCopyMenu) {
+      window.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => window.removeEventListener('mousedown', handleClickOutside);
+  }, [showCopyMenu]);
 
   // Sync initial language if opened with a specific language
-  React.useEffect(() => {
+  useEffect(() => {
     if (initialLang) {
       setCurrentLang(initialLang);
     }
@@ -66,6 +115,16 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
     return generateLanguageHtmlDocument(document, currentLang, allBreadcrumbs);
   }, [document, currentLang, allBreadcrumbs]);
 
+  const ideContent = useMemo(() => {
+    if (!document) return '';
+    return generateCurriculumIdeContent(document, currentLang);
+  }, [document, currentLang]);
+
+  const promptsOnlyContent = useMemo(() => {
+    if (!document) return '';
+    return generateCurriculumPromptsOnly(document);
+  }, [document]);
+
   if (!isOpen || !document) return null;
 
   const handleDownloadSingle = () => {
@@ -79,10 +138,54 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleCopySource = () => {
-    navigator.clipboard.writeText(generatedHtml);
-    setCopiedSource(true);
-    setTimeout(() => setCopiedSource(false), 2000);
+  const handleCopyToClipboard = async (format: 'ide' | 'html' | 'prompts') => {
+    let contentToCopy = '';
+    let formatLabel = '';
+
+    if (format === 'ide') {
+      contentToCopy = ideContent;
+      formatLabel = 'IDE Markdown';
+    } else if (format === 'html') {
+      contentToCopy = generatedHtml;
+      formatLabel = 'HTML Source';
+    } else {
+      contentToCopy = promptsOnlyContent;
+      formatLabel = 'AI Prompts';
+    }
+
+    try {
+      await navigator.clipboard.writeText(contentToCopy);
+      setCopiedFormat(format);
+      setShowCopyMenu(false);
+      setCopyFeedback({
+        text: `Copied ${formatLabel} to Clipboard!`,
+        details: `${contentToCopy.length.toLocaleString()} chars, ${document.chapters.length} chapters`
+      });
+
+      setTimeout(() => {
+        setCopiedFormat(null);
+        setCopyFeedback(null);
+      }, 2500);
+    } catch {
+      // Fallback
+      const textArea = window.document.createElement('textarea');
+      textArea.value = contentToCopy;
+      window.document.body.appendChild(textArea);
+      textArea.select();
+      window.document.execCommand('copy');
+      window.document.body.removeChild(textArea);
+
+      setCopiedFormat(format);
+      setShowCopyMenu(false);
+      setCopyFeedback({
+        text: `Copied ${formatLabel} to Clipboard!`,
+        details: 'Ready for external IDEs'
+      });
+      setTimeout(() => {
+        setCopiedFormat(null);
+        setCopyFeedback(null);
+      }, 2500);
+    }
   };
 
   const handleOpenNewTab = () => {
@@ -95,9 +198,25 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-6xl h-[94vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-6xl h-[94vh] flex flex-col shadow-2xl overflow-hidden relative">
+        
+        {/* Floating Toast Feedback for Copy to Clipboard */}
+        {copyFeedback && (
+          <div className="absolute top-16 right-6 z-50 bg-emerald-950/95 border border-emerald-500/50 text-emerald-200 px-4 py-2 rounded-xl shadow-2xl text-xs flex items-center gap-2.5 backdrop-blur-md animate-in slide-in-from-top-2 duration-150">
+            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div>
+              <div className="font-semibold">{copyFeedback.text}</div>
+              {copyFeedback.details && (
+                <div className="text-[11px] text-emerald-300/80 font-mono">
+                  {copyFeedback.details} — Ready to paste in Cursor, VS Code, or Windsurf
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Top Control Bar */}
-        <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-800 bg-slate-950">
+        <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-800 bg-slate-950 gap-2">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-400">
               <Globe className="w-5 h-5" />
@@ -118,38 +237,125 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mt-2 sm:mt-0">
+          <div className="flex items-center gap-2">
             {/* View Mode Toggle */}
             <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
               <button
                 onClick={() => setViewMode('preview')}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition ${viewMode === 'preview' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                title="View interactive rendered document"
               >
                 <Eye className="w-3.5 h-3.5" /> Rendered
               </button>
               <button
+                onClick={() => setViewMode('ide')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition ${viewMode === 'ide' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                title="View clean Markdown formatted for external IDEs"
+              >
+                <FileText className="w-3.5 h-3.5" /> IDE Format
+              </button>
+              <button
                 onClick={() => setViewMode('source')}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition ${viewMode === 'source' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                title="View raw HTML markup"
               >
                 <Code className="w-3.5 h-3.5" /> HTML Code
               </button>
             </div>
 
-            <button
-              onClick={handleCopySource}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg border border-slate-700 transition"
-              title="Copy raw HTML"
-            >
-              {copiedSource ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedSource ? 'Copied' : 'Copy HTML'}
-            </button>
+            {/* Copy to Clipboard Split Button */}
+            <div className="relative flex items-center" ref={copyMenuRef}>
+              <button
+                onClick={() => handleCopyToClipboard(viewMode === 'source' ? 'html' : 'ide')}
+                className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 text-xs font-semibold rounded-l-lg transition shadow-md ${
+                  copiedFormat 
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
+                    : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white'
+                }`}
+                title="Copy curriculum content to clipboard for external IDEs (Cursor, VS Code, Windsurf)"
+              >
+                {copiedFormat ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-200" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+                <span>{copiedFormat ? 'Copied to Clipboard!' : 'Copy to Clipboard'}</span>
+              </button>
+              <button
+                onClick={() => setShowCopyMenu(prev => !prev)}
+                className={`px-1.5 py-1.5 text-xs border-l border-white/20 rounded-r-lg transition shadow-md ${
+                  copiedFormat
+                    ? 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                    : 'bg-indigo-700 hover:bg-indigo-600 text-white'
+                }`}
+                title="Select clipboard copy format (IDE Markdown, Raw HTML, or AI Prompts)"
+              >
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCopyMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showCopyMenu && (
+                <div 
+                  className="absolute right-0 top-full mt-1.5 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1.5 z-50 text-xs backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
+                  onClick={() => setShowCopyMenu(false)}
+                >
+                  <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                    Copy Format for External IDE
+                  </div>
+                  <button
+                    onClick={() => handleCopyToClipboard('ide')}
+                    className="w-full px-3 py-2 text-left hover:bg-purple-950/60 hover:text-purple-300 flex items-start gap-2.5 transition"
+                  >
+                    <FileText className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-slate-200">IDE Markdown (.md)</div>
+                      <div className="text-[10px] text-slate-400">Chapters, topics & code blocks for Cursor / VS Code</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleCopyToClipboard('html')}
+                    className="w-full px-3 py-2 text-left hover:bg-purple-950/60 hover:text-purple-300 flex items-start gap-2.5 transition"
+                  >
+                    <Code className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-slate-200">Raw HTML Document</div>
+                      <div className="text-[10px] text-slate-400">Standalone .html file with embedded CSS</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleCopyToClipboard('prompts')}
+                    className="w-full px-3 py-2 text-left hover:bg-purple-950/60 hover:text-purple-300 flex items-start gap-2.5 transition"
+                  >
+                    <Terminal className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-slate-200">AI Prompts Only</div>
+                      <div className="text-[10px] text-slate-400">Numbered prompt text for AI chat windows</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
 
             <button
               onClick={handleDownloadSingle}
-              className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium rounded-lg transition shadow"
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition"
               title="Download HTML file"
             >
               <Download className="w-3.5 h-3.5" /> Download
+            </button>
+
+            {/* Listen (TTS) Toggle Button */}
+            <button
+              onClick={() => setShowTtsPlayer(prev => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition shadow-md border ${
+                showTtsPlayer
+                  ? 'bg-cyan-600 border-cyan-400 text-white shadow-cyan-900/30'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+              }`}
+              title="Listen to curriculum content read aloud with Text-to-Speech (Web Speech API)"
+            >
+              <Volume2 className={`w-3.5 h-3.5 ${showTtsPlayer ? 'text-cyan-100 animate-pulse' : 'text-cyan-400'}`} />
+              <span>{showTtsPlayer ? 'Audio Active' : 'Listen (TTS)'}</span>
             </button>
 
             <button
@@ -163,11 +369,21 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
             <button
               onClick={onClose}
               className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition ml-1"
+              title="Close modal (Esc)"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        {/* Text-to-Speech Audio Player Ribbon */}
+        {showTtsPlayer && (
+          <CurriculumTtsPlayer
+            document={document}
+            currentLang={currentLang}
+            onClose={() => setShowTtsPlayer(false)}
+          />
+        )}
 
         {/* 19-Language Switcher Ribbon with Filtering */}
         <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -259,15 +475,29 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
               sandbox="allow-scripts allow-same-origin"
               className="w-full h-full border-none bg-white"
             />
+          ) : viewMode === 'ide' ? (
+            <div className="w-full h-full overflow-auto p-4 bg-slate-950">
+              <PrismCodeBlock
+                code={ideContent}
+                language="markdown"
+                filename={`${document.subject}_${currentLang}_ide.md`}
+                maxHeightClass="max-h-[calc(85vh-160px)]"
+              />
+            </div>
           ) : (
-            <div className="w-full h-full overflow-auto p-4 font-mono text-xs text-slate-300 leading-relaxed bg-slate-950">
-              <pre className="whitespace-pre-wrap">{generatedHtml}</pre>
+            <div className="w-full h-full overflow-auto p-4 bg-slate-950">
+              <PrismCodeBlock
+                code={generatedHtml}
+                language="markup"
+                filename={`${document.subject}_${currentLang}.html`}
+                maxHeightClass="max-h-[calc(85vh-160px)]"
+              />
             </div>
           )}
         </div>
 
         {/* Bottom Status Bar */}
-        <div className="px-6 py-2.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+        <div className="px-6 py-2.5 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
           <div className="flex items-center gap-3">
             <span>Chapters: {document.chapters.length}</span>
             <span>•</span>
@@ -277,14 +507,36 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
             <span>•</span>
             <span className="text-emerald-400">Interactive Copy Buttons Active</span>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white transition"
-          >
-            Close Preview
-          </button>
+
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowTtsPlayer(prev => !prev)}
+              className="flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 font-medium transition group"
+              title="Toggle Text-to-Speech audio reader"
+            >
+              <Volume2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+              <span>{showTtsPlayer ? 'Hide Audio Bar' : 'Listen (TTS)'}</span>
+            </button>
+            <span>•</span>
+            <button
+              onClick={() => handleCopyToClipboard('ide')}
+              className="flex items-center gap-1.5 text-purple-400 hover:text-purple-300 font-medium transition group"
+              title="Copy formatted curriculum markdown to clipboard for external IDE"
+            >
+              <Copy className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+              <span>Copy for External IDE</span>
+            </button>
+            <span>•</span>
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white transition"
+            >
+              Close Preview
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+

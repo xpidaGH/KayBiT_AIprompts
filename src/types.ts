@@ -73,6 +73,8 @@ export interface CurriculumChapter {
   translations: Record<string, ChapterTranslation>;
 }
 
+export type DifficultyLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+
 export interface CurriculumDocument {
   id: string;
   subject: string; // e.g. "antivirus", "cybersecurity", "Advanced", "AIprompt", "fraud"
@@ -82,6 +84,9 @@ export interface CurriculumDocument {
   chapters: CurriculumChapter[];
   createdAt: string;
   sourceType: 'generated' | 'uploaded' | 'preset';
+  difficulty?: DifficultyLevel;
+  programmingLanguages?: string[];
+  tags?: string[];
 }
 
 export interface BreadcrumbItem {
@@ -101,4 +106,6 @@ export interface GenerationRequestPayload {
   targetLanguages?: string[];
   model?: string;
   includeCritiqueAndImproved?: boolean;
+  difficulty?: DifficultyLevel;
+  tags?: string[];
 }

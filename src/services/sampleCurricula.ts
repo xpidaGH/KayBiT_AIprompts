@@ -9,6 +9,9 @@ export const PRESET_CURRICULA: CurriculumDocument[] = [
     brandSub: 'Windows Security & Tooling',
     createdAt: '2026-09-01',
     sourceType: 'preset',
+    difficulty: 'Advanced',
+    programmingLanguages: ['PowerShell', 'Python', 'Go', 'Rust'],
+    tags: ['Security', 'Windows Hardening', 'DevOps', 'Defensive'],
     chapters: [
       {
         id: 1,
@@ -59,6 +62,9 @@ export const PRESET_CURRICULA: CurriculumDocument[] = [
     brandSub: 'Byte Technologies — Foundation',
     createdAt: '2026-09-01',
     sourceType: 'preset',
+    difficulty: 'Intermediate',
+    programmingLanguages: ['TypeScript', 'Python', 'JavaScript', 'Bash/Shell'],
+    tags: ['FullStack', 'Educational Web', 'PDF Generation', 'Piston Docker'],
     chapters: [
       {
         id: 1,
@@ -100,6 +106,9 @@ export const PRESET_CURRICULA: CurriculumDocument[] = [
     brandSub: 'Byte Technologies — Advanced',
     createdAt: '2026-09-01',
     sourceType: 'preset',
+    difficulty: 'Intermediate',
+    programmingLanguages: ['TypeScript', 'Bash/Shell', 'Node.js', 'PowerShell'],
+    tags: ['RealTime', 'Canvas', 'DevOps', 'Alerting', 'WebSockets'],
     chapters: [
       {
         id: 1,
@@ -137,6 +146,9 @@ export const PRESET_CURRICULA: CurriculumDocument[] = [
     brandSub: 'SOC & Dual-Agent Security Labs',
     createdAt: '2026-09-01',
     sourceType: 'preset',
+    difficulty: 'Expert',
+    programmingLanguages: ['Go', 'Python', 'JavaScript', 'SQL', 'PHP'],
+    tags: ['AppSec', 'CTF Labs', 'Docker', 'OWASP', 'Penetration Testing'],
     chapters: [
       {
         id: 1,
@@ -174,6 +186,9 @@ export const PRESET_CURRICULA: CurriculumDocument[] = [
     brandSub: 'Enterprise Forensic Financial Computing',
     createdAt: '2026-09-01',
     sourceType: 'preset',
+    difficulty: 'Expert',
+    programmingLanguages: ['Go', 'Rust', 'C#', 'Java', 'Python', 'SQL', 'R'],
+    tags: ['FinTech', 'Forensic Accounting', 'ETL Pipelines', 'ISA 240', 'Microservices'],
     chapters: [
       {
         id: 1,

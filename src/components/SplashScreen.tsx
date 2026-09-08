@@ -9,20 +9,24 @@ import {
   CheckCircle2, 
   Globe, 
   ShieldCheck,
-  Code2
+  Code2,
+  Keyboard
 } from 'lucide-react';
 import { AIAgentProvider } from '../types';
+import { BrandBadge } from '../data';
 
 interface SplashScreenProps {
   onEnterApp: (tab?: 'general' | 'curriculum') => void;
   onOpenUserGuide: () => void;
   onOpenInstallationGuide: () => void;
+  onOpenShortcuts?: () => void;
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({
   onEnterApp,
   onOpenUserGuide,
-  onOpenInstallationGuide
+  onOpenInstallationGuide,
+  onOpenShortcuts
 }) => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-4 sm:p-8 relative overflow-hidden">
@@ -32,18 +36,24 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 
       {/* Top Bar */}
       <div className="max-w-6xl w-full mx-auto flex items-center justify-between z-10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-0.5 shadow-lg shadow-purple-900/40 flex items-center justify-center">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-            </div>
-          </div>
-          <span className="font-bold text-lg text-white font-heading">
-            KayBiT<span className="text-purple-400">_AIprompts</span>
-          </span>
-        </div>
+        <BrandBadge size="md" showSubtitle={false} />
 
         <div className="flex items-center gap-2">
+          {/* Shortcuts Button on Splash Screen */}
+          {onOpenShortcuts && (
+            <button
+              onClick={onOpenShortcuts}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700/80 hover:border-amber-500/40 transition shadow-sm group"
+              title="View Keyboard Shortcuts (?)"
+            >
+              <Keyboard className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition-transform" />
+              <span className="hidden sm:inline">Shortcuts</span>
+              <kbd className="px-1 py-0.2 rounded bg-slate-950 border border-slate-700 font-mono text-[9px] text-amber-300">
+                ?
+              </kbd>
+            </button>
+          )}
+
           {/* User Guide Button on Splash Screen */}
           <button
             onClick={onOpenUserGuide}
@@ -159,6 +169,24 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
             <BookOpen className="w-4 h-4 text-purple-400" />
             <span>Read User Guide</span>
           </button>
+        </div>
+
+        {/* Quick Keyboard Navigation Hints */}
+        <div className="pt-3 flex flex-wrap items-center justify-center gap-3 text-xs text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 font-mono text-[10px] text-purple-300">1</kbd>
+            <span>General Agent</span>
+          </span>
+          <span className="text-slate-600">•</span>
+          <span className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 font-mono text-[10px] text-cyan-300">2</kbd>
+            <span>Curriculum Suite</span>
+          </span>
+          <span className="text-slate-600">•</span>
+          <span className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 font-mono text-[10px] text-amber-300">?</kbd>
+            <span>All Shortcuts</span>
+          </span>
         </div>
 
       </div>

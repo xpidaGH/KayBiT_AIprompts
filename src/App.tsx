@@ -7,10 +7,12 @@ import { HtmlPreviewModal } from './components/HtmlPreviewModal';
 import { UserGuideModal } from './components/UserGuideModal';
 import { InstallationModal } from './components/InstallationModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { ThemeSettingsModal } from './components/ThemeSettingsModal';
 import { AIAgentProvider, CurriculumDocument, BreadcrumbItem } from './types';
 import { PRESET_CURRICULA } from './services/sampleCurricula';
 import { USER_GUIDE_TEXT, INSTALLATION_GUIDE_TEXT } from './services/docsContent';
 import { getStoredLanguage, setStoredLanguage } from './services/i18n';
+import { ThemeId, getStoredTheme, applyTheme } from './data/themes';
 
 export default function App() {
   // Navigation & View State
@@ -29,6 +31,14 @@ export default function App() {
   // Cross-Component Messaging State
   const [transmittedPrompt, setTransmittedPrompt] = useState<string>('');
   const [curriculumTopicText, setCurriculumTopicText] = useState<string>('');
+
+  // Persistent UI Theme
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>(() => getStoredTheme());
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    applyTheme(currentTheme);
+  }, [currentTheme]);
 
   // Modals State
   const [isUserGuideOpen, setIsUserGuideOpen] = useState<boolean>(false);
@@ -81,6 +91,7 @@ export default function App() {
 
       // Escape key closes any open modal immediately
       if (e.key === 'Escape') {
+        if (isThemeModalOpen) { setIsThemeModalOpen(false); return; }
         if (isShortcutsOpen) { setIsShortcutsOpen(false); return; }
         if (isUserGuideOpen) { setIsUserGuideOpen(false); return; }
         if (isInstallationOpen) { setIsInstallationOpen(false); return; }
@@ -111,6 +122,12 @@ export default function App() {
         e.preventDefault();
         setShowSplash(false);
         setActiveTab('curriculum');
+        return;
+      }
+
+      if (e.altKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        setIsThemeModalOpen(prev => !prev);
         return;
       }
 
@@ -188,6 +205,9 @@ export default function App() {
           if (area) area.focus();
         }, 100);
         break;
+      case 'studio-theme':
+        setIsThemeModalOpen(true);
+        break;
       default:
         break;
     }
@@ -225,6 +245,13 @@ export default function App() {
           onClose={() => setIsInstallationOpen(false)}
           installationContent={INSTALLATION_GUIDE_TEXT}
         />
+
+        <ThemeSettingsModal
+          isOpen={isThemeModalOpen}
+          onClose={() => setIsThemeModalOpen(false)}
+          currentTheme={currentTheme}
+          onSelectTheme={setCurrentTheme}
+        />
       </div>
     );
   }
@@ -242,6 +269,7 @@ export default function App() {
         onOpenUserGuide={() => setIsUserGuideOpen(true)}
         onOpenInstallationGuide={() => setIsInstallationOpen(true)}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
+        onOpenThemeSettings={() => setIsThemeModalOpen(true)}
         onOpenSplash={() => setShowSplash(true)}
       />
 
@@ -301,6 +329,13 @@ export default function App() {
             >
               Native Packages
             </button>
+            <span>•</span>
+            <button
+              onClick={() => setIsThemeModalOpen(true)}
+              className="text-pink-400 hover:underline flex items-center gap-1"
+            >
+              <span>Themes</span>
+            </button>
           </div>
           <div className="text-slate-400">
             For Advanced CS Students (Python, JS/TS, Rust, Go, Java, C#, C++, SQL, R, Flutter, etc.)
@@ -333,6 +368,13 @@ export default function App() {
         isOpen={isInstallationOpen}
         onClose={() => setIsInstallationOpen(false)}
         installationContent={INSTALLATION_GUIDE_TEXT}
+      />
+
+      <ThemeSettingsModal
+        isOpen={isThemeModalOpen}
+        onClose={() => setIsThemeModalOpen(false)}
+        currentTheme={currentTheme}
+        onSelectTheme={setCurrentTheme}
       />
     </div>
   );

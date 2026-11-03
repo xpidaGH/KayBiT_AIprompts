@@ -12,12 +12,14 @@ import {
   Globe,
   Check,
   Search,
-  Keyboard
+  Keyboard,
+  Palette
 } from 'lucide-react';
 import { AIAgentProvider } from '../types';
 import { AI_PROVIDERS, SUPPORTED_LANGUAGES } from '../services/aiGateway';
 import { LANGUAGE_FLAGS, getUiTranslations } from '../services/i18n';
 import { KaybitLogoIcon } from '../data';
+import { KbtBrandIcon } from './KbtBrandIcon';
 
 interface HeaderProps {
   activeTab: 'general' | 'curriculum';
@@ -29,6 +31,7 @@ interface HeaderProps {
   onOpenUserGuide: () => void;
   onOpenInstallationGuide: () => void;
   onOpenShortcuts: () => void;
+  onOpenThemeSettings: () => void;
   onOpenSplash?: () => void;
 }
 
@@ -42,6 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenUserGuide,
   onOpenInstallationGuide,
   onOpenShortcuts,
+  onOpenThemeSettings,
   onOpenSplash
 }) => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
@@ -149,8 +153,9 @@ export const Header: React.FC<HeaderProps> = ({
             className={`flex items-center gap-2.5 sm:gap-3 ${onOpenSplash ? 'cursor-pointer' : ''} group`}
             title="KayBiT AI Studio (Click to view Welcome Splash)"
           >
-            <div className="relative">
-              <KaybitLogoIcon size={38} className="shadow-md shadow-purple-950/40 rounded-xl transition transform group-hover:scale-105" />
+            <div className="relative flex items-center gap-1.5">
+              <KbtBrandIcon variant="web" size="md" withSquircleMask showGlow />
+              <KaybitLogoIcon size={34} className="shadow-md shadow-purple-950/40 rounded-xl transition transform group-hover:scale-105 hidden sm:block" />
               <div className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-full animate-ping opacity-75 pointer-events-none" />
             </div>
             <div>
@@ -369,6 +374,17 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Theme Settings Button */}
+            <button
+              onClick={onOpenThemeSettings}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-medium rounded-lg border border-slate-800 hover:border-pink-500/40 transition group"
+              title="Change Studio Theme (5 variations: Editorial, Technical, Warm, Dark, Vibrant)"
+              aria-label="Theme Settings"
+            >
+              <Palette className="w-3.5 h-3.5 text-pink-400 group-hover:rotate-12 transition-transform" />
+              <span className="hidden xl:inline">Themes</span>
+            </button>
 
             {/* Keyboard Shortcuts Button */}
             <button

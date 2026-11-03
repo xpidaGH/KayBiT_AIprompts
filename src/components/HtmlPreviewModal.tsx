@@ -15,7 +15,8 @@ import {
   Terminal,
   Sparkles,
   Volume2,
-  VolumeX
+  VolumeX,
+  FileDown
 } from 'lucide-react';
 import { CurriculumDocument, BreadcrumbItem } from '../types';
 import { 
@@ -23,6 +24,7 @@ import {
   generateCurriculumIdeContent, 
   generateCurriculumPromptsOnly 
 } from '../services/htmlGenerator';
+import { exportCurriculumToPdf } from '../services/pdfGenerator';
 import { SUPPORTED_LANGUAGES } from '../services/aiGateway';
 import { PrismCodeBlock } from './PrismCodeBlock';
 import { CurriculumTtsPlayer } from './CurriculumTtsPlayer';
@@ -136,6 +138,25 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPdf = () => {
+    if (!document) return;
+    try {
+      exportCurriculumToPdf(document, {
+        languageCode: currentLang,
+        breadcrumbs: allBreadcrumbs
+      });
+      setCopyFeedback({
+        text: `Exported ${document.subject}_${currentLang}_curriculum.pdf!`,
+        details: `${document.chapters.length} chapters formatted with jsPDF`
+      });
+      setTimeout(() => {
+        setCopyFeedback(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+    }
   };
 
   const handleCopyToClipboard = async (format: 'ide' | 'html' | 'prompts') => {
@@ -341,7 +362,17 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
               className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition"
               title="Download HTML file"
             >
-              <Download className="w-3.5 h-3.5" /> Download
+              <Download className="w-3.5 h-3.5" /> HTML
+            </button>
+
+            {/* Download as PDF Button (jsPDF) */}
+            <button
+              onClick={handleDownloadPdf}
+              className="flex items-center gap-1 px-3 py-1.5 bg-rose-600/90 hover:bg-rose-500 text-white text-xs font-semibold rounded-lg shadow-sm border border-rose-500/50 transition group"
+              title="Download offline curriculum document formatted as PDF using jsPDF"
+            >
+              <FileDown className="w-3.5 h-3.5 text-rose-200 group-hover:scale-110 transition-transform" />
+              <span>PDF</span>
             </button>
 
             {/* Listen (TTS) Toggle Button */}
@@ -516,6 +547,14 @@ export const HtmlPreviewModal: React.FC<HtmlPreviewModalProps> = ({
             >
               <Volume2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
               <span>{showTtsPlayer ? 'Hide Audio Bar' : 'Listen (TTS)'}</span>
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              className="flex items-center gap-1.5 text-rose-400 hover:text-rose-300 font-medium transition group"
+              title="Download formatted curriculum as PDF via jsPDF"
+            >
+              <FileDown className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+              <span>Save PDF</span>
             </button>
             <span>•</span>
             <button

@@ -143,6 +143,15 @@ export const KEYBOARD_SHORTCUTS: ShortcutDefinition[] = [
     global: true
   },
   {
+    id: 'studio-theme',
+    category: 'studio',
+    keys: ['Alt+m'],
+    displayKeys: ['Alt', 'M'],
+    label: 'Theme Settings',
+    description: 'Switch between 5 UI themes (Editorial, Technical, Warm, Dark, Vibrant)',
+    global: true
+  },
+  {
     id: 'studio-escape',
     category: 'studio',
     keys: ['Escape'],

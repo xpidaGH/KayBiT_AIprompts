@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Download, Terminal, Smartphone, Monitor, Globe, Check, Copy } from 'lucide-react';
+import { X, Download, Terminal, Smartphone, Monitor, Globe, Check, Copy, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { KbtBrandShowcase, KbtBrandIcon } from './KbtBrandIcon';
 
 interface InstallationModalProps {
   isOpen: boolean;
@@ -8,7 +9,7 @@ interface InstallationModalProps {
 }
 
 export const InstallationModal: React.FC<InstallationModalProps> = ({ isOpen, onClose, installationContent }) => {
-  const [activeTab, setActiveTab] = useState<'all' | 'tauri' | 'capacitor' | 'github'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'icons' | 'tauri' | 'capacitor' | 'github'>('all');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -53,6 +54,12 @@ export const InstallationModal: React.FC<InstallationModalProps> = ({ isOpen, on
             Full Guide
           </button>
           <button
+            onClick={() => setActiveTab('icons')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition ${activeTab === 'icons' ? 'bg-lime-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+          >
+            <ImageIcon className="w-3.5 h-3.5" /> Brand & App Icons
+          </button>
+          <button
             onClick={() => setActiveTab('tauri')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition ${activeTab === 'tauri' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
           >
@@ -78,6 +85,67 @@ export const InstallationModal: React.FC<InstallationModalProps> = ({ isOpen, on
             <pre className="whitespace-pre-wrap font-sans text-sm text-slate-200 leading-relaxed break-words">
               {installationContent}
             </pre>
+          )}
+
+          {activeTab === 'icons' && (
+            <div className="space-y-6">
+              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                <h3 className="text-base font-semibold text-lime-400 flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4" /> Multiplatform Brand Logo & App Icon Specifications
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Tailored according to <code className="text-lime-300 bg-slate-950 px-1 py-0.5 rounded">kbt-integration-guide.txt</code> using the tech-styled green/yellow cyber spider emblem with dynamic SVG squircle masks and multi-resolution sizing.
+                </p>
+              </div>
+
+              {/* Interactive Showcase */}
+              <KbtBrandShowcase />
+
+              {/* Bundling Specifications Table */}
+              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+                <div className="text-sm font-semibold text-white">Multiplatform Asset Bundling Specifications</div>
+                <div className="overflow-x-auto text-xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 font-mono">
+                        <th className="py-2 px-3">Target Platform</th>
+                        <th className="py-2 px-3">Config Location</th>
+                        <th className="py-2 px-3">Dimension Layout</th>
+                        <th className="py-2 px-3">Asset Type</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-sans text-slate-300">
+                      <tr>
+                        <td className="py-2.5 px-3 font-semibold text-cyan-300">Desktop (Tauri v2 / Windows & macOS)</td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-slate-400">src-tauri/tauri.conf.json</td>
+                        <td className="py-2.5 px-3">Up to 512x512 / Title Bar: 24x24</td>
+                        <td className="py-2.5 px-3 font-mono text-lime-300">.ico (Windows) / .icns (macOS)</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2.5 px-3 font-semibold text-emerald-300">Mobile (Capacitor / Android & iOS)</td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-slate-400">src-cordova/res/icon, android/app</td>
+                        <td className="py-2.5 px-3">Adaptive Vectors / App Bar: 28x28</td>
+                        <td className="py-2.5 px-3 font-mono text-lime-300">Foreground/Background .png</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2.5 px-3 font-semibold text-purple-300">Web App (Vite & PWA)</td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-slate-400">public/manifest.json</td>
+                        <td className="py-2.5 px-3">32x32, 192x192, 512x512</td>
+                        <td className="py-2.5 px-3 font-mono text-lime-300">Transparent .png / .svg</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Developer Command */}
+              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                <div className="text-xs font-semibold text-slate-300">Tauri CLI Icon Generator Command:</div>
+                <pre className="p-3 rounded-lg bg-black text-lime-400 font-mono text-xs overflow-x-auto">
+                  npm run tauri icon ./public/assets/kbt-logo-transparent.png
+                </pre>
+              </div>
+            </div>
           )}
 
           {activeTab === 'tauri' && (

@@ -2,10 +2,8 @@ name: Multiplatform Production Release & Code Signing
 
 on:
   push:
-    branches:
-      - main
     tags:
-      - 'v*.*.*'
+      - 'v*'
   workflow_dispatch:
 
 permissions:

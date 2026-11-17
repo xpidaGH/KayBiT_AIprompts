@@ -1,4 +1,4 @@
-name: Multiplatform Production Release & Code Signing
+name: KBT Multiplatform Build, Sign & Release
 
 on:
   push:
@@ -6,260 +6,193 @@ on:
       - 'v*'
   workflow_dispatch:
 
-permissions:
-  contents: write
-  packages: write
+concurrency:
+  group: kbt-release-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  CARGO_TERM_COLOR: always
-  NODE_VERSION: '20'
+  APP_VERSION: 1.0.${{ github.run_number }}
+  BUILD_NUMBER: ${{ github.run_number }}
 
 jobs:
-  prepare:
-    name: Prepare Release & Generate Changelog
-    runs-on: ubuntu-latest
-    outputs:
-      build_number: ${{ steps.version.outputs.build_number }}
-      version_tag: ${{ steps.version.outputs.version_tag }}
-      changelog: ${{ steps.changelog.outputs.changelog }}
+  build-apple:
+    name: Apple (iOS .ipa + macOS Universal .dmg)
+    runs-on: macos-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Calculate Continuous Build Number & Version
-        id: version
-        run: |
-          BUILD_NUM=${{ github.run_number }}
-          echo "build_number=$BUILD_NUM" >> $GITHUB_OUTPUT
-          
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-          else
-            TAG_NAME="v2.4.${BUILD_NUM}"
-          fi
-          echo "version_tag=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "Target Release Tag: $TAG_NAME (Build $BUILD_NUM)"
-
-      - name: Extract Commit Changelog
-        id: changelog
-        run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || "")
-          if [ -z "$PREV_TAG" ]; then
-            COMMITS=$(git log -n 25 --pretty=format:"* %s (%h - %an)")
-          else
-            COMMITS=$(git log ${PREV_TAG}..HEAD --pretty=format:"* %s (%h - %an)")
-          fi
-          
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "### 🚀 Automated Changelog (${{ steps.version.outputs.version_tag }})" >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "$COMMITS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-  build-and-sign:
-    name: Build & Package (${{ matrix.target.name }})
-    needs: prepare
-    runs-on: ${{ matrix.target.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - name: macOS & iOS
-            os: macos-latest
-            platform: macos-ios
-          - name: Windows
-            os: windows-latest
-            platform: windows
-          - name: Linux & Android
-            os: ubuntu-latest
-            platform: linux-android
-
-    steps:
-      - name: Checkout Code
+      - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
+      - name: Setup Node & Rust Universal Targets
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install Project Dependencies
-        run: npm ci
-
-      # macOS & iOS Pipeline
-      - name: Setup Rust (macOS Tauri)
-        if: matrix.target.platform == 'macos-ios'
-        uses: dtolnay/rust-toolchain@stable
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-apple-darwin,aarch64-apple-darwin
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - name: Import Apple Code Signing Identity
-        if: matrix.target.platform == 'macos-ios' && env.APPLE_CERT_SET == 'true'
+      - name: Install Dependencies & Build Web Bundle
+        run: |
+          npm ci
+          npm run build
+
+      - name: Import Apple Code-Signing Certificates in Ephemeral Keychain
         uses: apple-actions/import-codesign-certs@v2
         with:
-          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        env:
-          APPLE_CERT_SET: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' }}
+          p12-file-base64: ${{ secrets.APPLE_CERT_BASE64 }}
+          p12-password: ${{ secrets.APPLE_CERT_PASSWORD }}
 
-      - name: Install iOS Provisioning Profile
-        if: matrix.target.platform == 'macos-ios' && secrets.APPLE_PROVISION_PROFILE_BASE64 != ''
-        run: |
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "${{ secrets.APPLE_PROVISION_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
-
-      - name: Generate Dynamic exportOptions.plist
-        if: matrix.target.platform == 'macos-ios'
+      - name: Decode Provisioning Profile & Generate exportOptions.plist from Secrets
         env:
+          APPLE_PROVISION_PROFILE_BASE64: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_BUNDLE_ID: ${{ secrets.APPLE_BUNDLE_ID }}
-          APPLE_PROVISIONING_PROFILE_NAME: ${{ secrets.APPLE_PROVISIONING_PROFILE_NAME }}
+          APPLE_PROFILE_NAME: ${{ secrets.APPLE_PROFILE_NAME }}
         run: |
-          mkdir -p ios/App
-          cat << 'EOF' > ios/App/exportOptions.plist
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$APPLE_PROVISION_PROFILE_BASE64" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/dist.mobileprovision
+          cat <<EOF > ios/App/exportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>teamID</key>
-              <string>${APPLE_TEAM_ID}</string>
-              <key>uploadBitcode</key>
-              <false/>
-              <key>compileBitcode</key>
-              <false/>
-              <key>uploadSymbols</key>
-              <true/>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>${APPLE_BUNDLE_ID}</key>
-                  <string>${APPLE_PROVISIONING_PROFILE_NAME}</string>
-              </dict>
-          </dict>
-          </plist>
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>uploadSymbols</key><true/>
+            <key>provisioningProfiles</key><dict>
+              <key>$APPLE_BUNDLE_ID</key><string>$APPLE_PROFILE_NAME</string>
+            </dict>
+          </dict></plist>
           EOF
-          sed -i '' -e "s/\${APPLE_TEAM_ID}/$APPLE_TEAM_ID/g" \
-                    -e "s/\${APPLE_BUNDLE_ID}/$APPLE_BUNDLE_ID/g" \
-                    -e "s/\${APPLE_PROVISIONING_PROFILE_NAME}/$APPLE_PROVISIONING_PROFILE_NAME/g" ios/App/exportOptions.plist
 
-      - name: Build Web Application
-        run: npm run build
-
-      - name: Compile macOS Universal DMG (.dmg & .app)
-        if: matrix.target.platform == 'macos-ios'
+      - name: Sync Capacitor iOS, Increment Build Number & Archive .ipa
         run: |
-          if [ -d "src-tauri" ]; then
-            npx tauri build --target universal-apple-darwin
-          else
-            mkdir -p dist/desktop
-            tar -czf dist/desktop/KayBiT_macOS_v${{ needs.prepare.outputs.build_number }}.tar.gz -C dist .
-          fi
+          npx cap sync ios
+          cd ios/App
+          agvtool new-version -all ${{ github.run_number }}
+          xcodebuild -project App.xcodeproj \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath ../../build/App.xcarchive \
+            archive
+          xcodebuild -exportArchive \
+            -archivePath ../../build/App.xcarchive \
+            -exportOptionsPlist exportOptions.plist \
+            -exportPath ../../build/ios-out
 
-      - name: Compile & Package iOS (.ipa)
-        if: matrix.target.platform == 'macos-ios'
+      - name: Upload iOS .ipa to TestFlight
+        env:
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
         run: |
-          if [ -d "ios" ]; then
-            npx cap sync ios
-            xcodebuild -workspace ios/App/App.xcworkspace \
-                       -scheme App \
-                       -configuration Release \
-                       -archivePath build/App.xcarchive \
-                       archive
-            xcodebuild -exportArchive \
-                       -archivePath build/App.xcarchive \
-                       -exportOptionsPlist ios/App/exportOptions.plist \
-                       -exportPath build/ipa
+          if [ -z "$APPSTORE_KEY_ID" ]; then
+            echo "APPSTORE_KEY_ID not set; skipping TestFlight upload."
+            exit 0
           fi
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$APPSTORE_PRIVATE_KEY" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8
+          xcrun altool --upload-app --type ios --file build/ios-out/*.ipa --apiKey "$APPSTORE_KEY_ID" --apiIssuer "$APPSTORE_ISSUER_ID"
+          rm -rf ~/.appstoreconnect/private_keys
 
-      - name: Auto-Publish to Apple TestFlight
-        if: matrix.target.platform == 'macos-ios' && secrets.APP_STORE_CONNECT_PRIVATE_KEY != ''
-        uses: apple-actions/upload-testflight-build@v1
+      - name: Build macOS Universal Binary (.dmg & .app) via Tauri
+        run: |
+          npm run tauri icon ./public/assets/kbt-logo-transparent.png
+          npx tauri build --target universal-apple-darwin
+
+      - name: Upload macOS Universal Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          app-path: 'build/ipa/App.ipa'
-          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          name: macos-universal-bundle
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
 
-      # Windows Pipeline
-      - name: Setup Rust (Windows)
-        if: matrix.target.platform == 'windows'
-        uses: dtolnay/rust-toolchain@stable
+  build-windows:
+    name: Windows (.msi & .exe via Tauri)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
-      - name: Install WiX & NSIS Toolsets (Windows)
-        if: matrix.target.platform == 'windows'
+      - name: Setup Node & Rust MSVC Toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Dependencies & Generate Tauri Icons
         shell: pwsh
         run: |
-          dotnet tool install --global wix --version 4.0.5
-          choco install nsis -y
+          npm ci
+          npm run tauri icon ./public/assets/kbt-logo-transparent.png
 
-      - name: Build Windows Installers (.exe & .msi via Tauri)
-        if: matrix.target.platform == 'windows'
+      - name: Optional Windows Authenticode Cert Load (SmartScreen Bypass)
         shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
         run: |
-          npm run build
-          if (Test-Path "src-tauri") {
-            npx tauri build
+          if ($env:WINDOWS_SIGNING_CERT_BASE64) {
+            $certPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+            [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERT_BASE64))
+            Write-Output "TAURI_SIGNING_PFX=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append
           } else {
-            New-Item -ItemType Directory -Force -Path "dist\desktop"
-            Compress-Archive -Path "dist\*" -DestinationPath "dist\desktop\KayBiT_Windows_x64_v${{ needs.prepare.outputs.build_number }}.zip"
+            Write-Host "No Authenticode cert configured; Tauri will output unsigned .msi/.exe."
           }
 
-      # Linux & Android Pipeline
-      - name: Setup Java Development Kit (JDK 17)
-        if: matrix.target.platform == 'linux-android'
-        uses: actions/setup-java@v4
+      - name: Compile Windows .msi & .exe Installers
+        shell: pwsh
+        run: npx tauri build
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          name: windows-installers
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
 
-      - name: Setup Android SDK & Build Tools
-        if: matrix.target.platform == 'linux-android'
-        uses: android-actions/setup-android@v3
+  build-ubuntu:
+    name: Android (.aab/.apk) & Linux PipeWire (.deb/.AppImage)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
-      - name: Install Linux Desktop Dependencies (PipeWire, WebKit2GTK)
-        if: matrix.target.platform == 'linux-android'
+      - name: Install Linux PipeWire & WebKitGTK Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libpipewire-0.3-dev \
-            libgstreamer1.0-dev \
-            libgstreamer-plugins-base1.0-dev \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libssl-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+            libpipewire-0.3-dev pipewire-audio-client-libraries
 
-      - name: Compile Linux Binary (.deb & .AppImage)
-        if: matrix.target.platform == 'linux-android'
+      - name: Setup Node, Java 17, Android SDK/NDK & Rust
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Web Bundle & Compile Android APK / AAB
         run: |
+          npm ci
           npm run build
-          if [ -d "src-tauri" ]; then
-            npx tauri build
-          fi
+          npx cap sync android
+          cd android && ./gradlew bundleRelease assembleRelease -PversionCode=${{ github.run_number }}
 
-      - name: Build Android Bundle (.aab & .apk)
-        if: matrix.target.platform == 'linux-android'
-        run: |
-          if [ -d "android" ]; then
-            npx cap sync android
-            cd android
-            ./gradlew bundleRelease assembleRelease
-          fi
-
-      - name: Sign Android Release (.aab / .apk)
-        if: matrix.target.platform == 'linux-android' && secrets.ANDROID_KEYSTORE_BASE64 != ''
+      - name: Decode Base64 Keystore & Sign Android AAB
         uses: r0adkll/sign-android-release@v1
+        id: sign_aab
         with:
           releaseDirectory: android/app/build/outputs/bundle/release
           signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -267,134 +200,131 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Decode Google Play Service Account JSON
-        if: matrix.target.platform == 'linux-android' && secrets.PLAY_SERVICE_ACCOUNT_JSON_BASE64 != ''
-        run: |
-          echo "${{ secrets.PLAY_SERVICE_ACCOUNT_JSON_BASE64 }}" | base64 --decode > service-account.json
+      - name: Decode Base64 Keystore & Sign Android APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_apk
+        with:
+          releaseDirectory: android/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Auto-Publish to Google Play Internal Testing Track
-        if: matrix.target.platform == 'linux-android' && secrets.PLAY_SERVICE_ACCOUNT_JSON_BASE64 != ''
+      - name: Publish Signed .aab to Google Play Internal Testing Track
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        if: env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != ''
         uses: r0adkll/upload-google-play@v1
         with:
-          serviceAccountJson: service-account.json
-          packageName: ${{ secrets.APPLE_BUNDLE_ID || 'com.kaybit.aiprompts' }}
-          releaseFiles: android/app/build/outputs/bundle/release/*.aab
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: edu.kbt.globalapp
+          releaseFiles: ${{ steps.sign_aab.outputs.signedReleaseFile }}
           track: internal
           status: completed
 
-      - name: Stash Compiled Release Artifacts
+      - name: Build Linux .deb & .AppImage with PipeWire Support
+        run: |
+          npm run tauri icon ./public/assets/kbt-logo-transparent.png
+          npx tauri build
+
+      - name: Upload Linux & Android Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts-${{ matrix.target.platform }}
+          name: linux-and-android-bundles
           path: |
-            dist/desktop/*
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/deb/*.deb
-            build/ipa/*.ipa
-            android/app/build/outputs/bundle/release/*.aab
+            src-tauri/target/release/bundle/appimage/*.AppImage
             android/app/build/outputs/apk/release/*.apk
-          if-no-files-found: ignore
 
-  publish-release:
-    name: Publish to GitHub Releases Page
-    needs: [prepare, build-and-sign]
+    publish-release:
+    name: Automated Changelog, GitHub Release & Alerts
+    needs: [ build-apple, build-windows, build-ubuntu ]
+    if: always()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Download All Artifacts
+      - name: Checkout Full History for Changelog
+        if: needs.build-apple.result == 'success' && needs.build-windows.result == 'success' && needs.build-ubuntu.result == 'success'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Desktop & Android Artifacts
+        if: needs.build-apple.result == 'success' && needs.build-windows.result == 'success' && needs.build-ubuntu.result == 'success'
         uses: actions/download-artifact@v4
         with:
           path: release-assets
-          merge-multiple: true
 
-      - name: Publish GitHub Release with Changelog & Installers
+      - name: Generate Automated Changelog from Git Commits
+        if: needs.build-apple.result == 'success' && needs.build-windows.result == 'success' && needs.build-ubuntu.result == 'success'
+        id: changelog
+        run: |
+          RELEASE_TAG="${{ github.ref_type == 'tag' && github.ref_name || format('v1.0.{0}', github.run_number) }}"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            NOTES=$(git log -n 20 --pretty=format:"- %s (%h)")
+          else
+            NOTES=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)")
+          fi
+          {
+            echo "BODY<<EOF"
+            echo "## KBT Multiplatform Release $RELEASE_TAG"
+            echo ""
+            echo "### Changes"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish Installers (.msi, .exe, .dmg, .AppImage, .deb, .apk) to GitHub Releases
+        if: needs.build-apple.result == 'success' && needs.build-windows.result == 'success' && needs.build-ubuntu.result == 'success'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.prepare.outputs.version_tag }}
-          name: "KayBiT AI Prompt Studio ${{ needs.prepare.outputs.version_tag }} (Build #${{ needs.prepare.outputs.build_number }})"
-          body: |
-            ${{ needs.prepare.outputs.changelog }}
-
-            ### 📦 Downloadable Multiplatform Installers
-            - **Windows**: `.msi` / `.exe` (Tauri 64-bit installer with WiX/NSIS)
-            - **macOS**: `.dmg` (Universal Binary - Apple Silicon M1-M4 & Intel x86_64)
-            - **Linux**: `.AppImage` & `.deb` (Built with native PipeWire & WebKit2GTK support)
-            - **Android**: `.apk` & `.aab` (Signed for Google Play Internal Track)
-            - **iOS**: `.ipa` (Signed for App Store / TestFlight distribution)
+          tag_name: ${{ steps.changelog.outputs.RELEASE_TAG }}
+          name: KBT Studio ${{ steps.changelog.outputs.RELEASE_TAG }}
+          body: ${{ steps.changelog.outputs.BODY }}
           files: |
             release-assets/**/*.msi
             release-assets/**/*.exe
             release-assets/**/*.dmg
             release-assets/**/*.AppImage
             release-assets/**/*.deb
-            release-assets/**/*.ipa
-            release-assets/**/*.aab
             release-assets/**/*.apk
-            release-assets/**/*.zip
-            release-assets/**/*.tar.gz
+
+      - name: Notify Team via Slack
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  notify:
-    name: Send Multi-Channel Notifications
-    needs: [prepare, build-and-sign, publish-release]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Determine Build Status
-        id: status
-        run: |
-          if [ "${{ needs.publish-release.result }}" == "success" ]; then
-            echo "status_title=SUCCESS" >> $GITHUB_OUTPUT
-            echo "status_color=#10b981" >> $GITHUB_OUTPUT
-            echo "discord_color=3066993" >> $GITHUB_OUTPUT
-          else
-            echo "status_title=FAILURE" >> $GITHUB_OUTPUT
-            echo "status_color=#ef4444" >> $GITHUB_OUTPUT
-            echo "discord_color=15158332" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Send Slack Notification
-        if: secrets.SLACK_WEBHOOK_URL != ''
-        uses: slackapi/slack-github-action@v2.0.0
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: env.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.27.0
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
           payload: |
             {
-              "text": "Build ${{ steps.status.outputs.status_title }}: KayBiT Studio ${{ needs.prepare.outputs.version_tag }} (Run #${{ needs.prepare.outputs.build_number }})",
-              "attachments": [
-                {
-                  "color": "${{ steps.status.outputs.status_color }}",
-                  "fields": [
-                    { "title": "Version", "value": "${{ needs.prepare.outputs.version_tag }}", "short": true },
-                    { "title": "Commit Author", "value": "${{ github.actor }}", "short": true },
-                    { "title": "Branch / Tag", "value": "${{ github.ref_name }}", "short": true },
-                    { "title": "Release URL", "value": "https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.version_tag }}", "short": false }
-                  ]
-                }
-              ]
+              "text": "KBT Build #${{ github.run_number }} finished — Apple: ${{ needs.build-apple.result }}, Windows: ${{ needs.build-windows.result }}, Ubuntu/Android: ${{ needs.build-ubuntu.result }}"
             }
 
-      - name: Send Discord Notification
-        if: secrets.DISCORD_WEBHOOK_URL != ''
+      - name: Notify Team via Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        if: env.DISCORD_WEBHOOK_URL != ''
         run: |
           curl -H "Content-Type: application/json" \
-               -X POST \
-               -d '{
-                 "username": "KayBiT CI/CD Bot",
-                 "avatar_url": "https://raw.githubusercontent.com/${{ github.repository }}/main/public/assets/kbt-logo-transparent.png",
-                 "embeds": [{
-                   "title": "KayBiT Studio Build ${{ steps.status.outputs.status_title }}",
-                   "url": "https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.version_tag }}",
-                   "color": ${{ steps.status.outputs.discord_color }},
-                   "description": "Continuous Integration Build #${{ needs.prepare.outputs.build_number }} for **${{ needs.prepare.outputs.version_tag }}** finished with status: **${{ steps.status.outputs.status_title }}**.",
-                   "fields": [
-                     { "name": "Triggered by", "value": "${{ github.actor }}", "inline": true },
-                     { "name": "Branch", "value": "${{ github.ref_name }}", "inline": true },
-                     { "name": "TestFlight & Google Play", "value": "Deployed to Internal Tracks", "inline": false }
-                   ],
-                   "footer": { "text": "KayBiT Multiplatform Release Pipeline" }
-                 }]
-               }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+            -d '{"content": "KBT Build #${{ github.run_number }} — Apple: ${{ needs.build-apple.result }}, Windows: ${{ needs.build-windows.result }}, Ubuntu: ${{ needs.build-ubuntu.result }}"}' \
+            "$DISCORD_WEBHOOK_URL"
+
+      - name: Notify Team via Email
+        env:
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        if: env.SMTP_USERNAME != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ env.SMTP_USERNAME }}
+          password: ${{ env.SMTP_PASSWORD }}
+          subject: "KBT Multiplatform Build #${{ github.run_number }} Status"
+          to: team@kbt-academy.example
+          from: "KBT CI Bot <ci@kbt-academy.example>"
+          body: "Build #${{ github.run_number }} results -> Apple: ${{ needs.build-apple.result }}, Windows: ${{ needs.build-windows.result }}, Ubuntu: ${{ needs.build-ubuntu.result }}."
